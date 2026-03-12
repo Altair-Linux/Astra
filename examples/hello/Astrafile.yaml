@@ -1,0 +1,18 @@
+name: hello
+version: "1.0.0"
+architecture: x86_64
+description: "A simple hello world package for Astra"
+maintainer: "Altair Linux <contact@altairlinux.org>"
+license: ZPL-2.0
+dependencies: []
+optional_dependencies: []
+conflicts: []
+provides: []
+files_dir: files
+scripts:
+  post_install: |
+    #!/bin/sh
+    echo "Hello from Astra! Package installed successfully."
+  pre_remove: |
+    #!/bin/sh
+    echo "Goodbye! Removing hello package."

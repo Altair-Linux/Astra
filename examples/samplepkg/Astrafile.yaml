@@ -1,0 +1,18 @@
+name: samplepkg
+version: "1.0.0"
+architecture: x86_64
+description: "A sample package demonstrating Astra package format"
+maintainer: "Altair Linux <contact@altairlinux.org>"
+license: ZPL-2.0
+dependencies:
+  - name: hello
+    version: ">=1.0.0"
+optional_dependencies: []
+conflicts: []
+provides:
+  - sample
+files_dir: files
+scripts:
+  post_install: |
+    #!/bin/sh
+    echo "samplepkg installed successfully."

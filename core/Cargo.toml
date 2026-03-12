@@ -1,0 +1,26 @@
+[package]
+name = "astra-core"
+description = "Core package management logic for Astra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+astra-pkg.workspace = true
+astra-db.workspace = true
+astra-resolver.workspace = true
+astra-repo.workspace = true
+astra-crypto.workspace = true
+astra-builder.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tempfile.workspace = true
+url.workspace = true
+walkdir.workspace = true

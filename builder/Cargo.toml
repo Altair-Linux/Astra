@@ -1,0 +1,23 @@
+[package]
+name = "astra-builder"
+description = "Package builder for Astra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+astra-pkg.workspace = true
+astra-crypto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+hex.workspace = true
+walkdir.workspace = true
+chrono.workspace = true
+semver.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true

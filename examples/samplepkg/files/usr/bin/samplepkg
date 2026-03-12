@@ -1,0 +1,4 @@
+#!/bin/sh
+# samplepkg - demonstrates dependency on hello
+hello
+echo "This is samplepkg, which depends on hello."

@@ -1,0 +1,23 @@
+[package]
+name = "astra-pkg"
+description = "Astra package format implementation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+astra-crypto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tar.workspace = true
+zstd.workspace = true
+sha2.workspace = true
+hex.workspace = true
+chrono.workspace = true
+semver.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+walkdir.workspace = true
+tempfile.workspace = true

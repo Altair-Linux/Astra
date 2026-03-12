@@ -1,0 +1,4 @@
+#!/bin/sh
+# hello - A simple greeting program
+echo "Hello from Astra Package Manager!"
+echo "Altair Linux - Built with care."

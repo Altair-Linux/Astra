@@ -1,0 +1,19 @@
+[package]
+name = "astra-db"
+description = "Local package database for Astra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+astra-pkg.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+fs2.workspace = true

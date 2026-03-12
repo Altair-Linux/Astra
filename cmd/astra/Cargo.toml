@@ -1,0 +1,33 @@
+[package]
+name = "astra"
+description = "Astra Package Manager - Modern package manager for Altair Linux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "astra"
+path = "src/main.rs"
+
+[dependencies]
+astra-core.workspace = true
+astra-pkg.workspace = true
+astra-db.workspace = true
+astra-resolver.workspace = true
+astra-repo.workspace = true
+astra-repo-server.workspace = true
+astra-builder.workspace = true
+astra-crypto.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+colored.workspace = true
+indicatif.workspace = true
+dialoguer.workspace = true
+semver.workspace = true

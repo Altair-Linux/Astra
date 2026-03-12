@@ -1,0 +1,75 @@
+[workspace]
+members = [
+    "cmd/astra",
+    "core",
+    "resolver",
+    "db",
+    "pkg",
+    "repo",
+    "repo-server",
+    "builder",
+    "crypto",
+    "tests",
+]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "ZPL-2.0"
+repository = "https://github.com/Altair-Linux/Astra"
+authors = ["Altair Linux <contact@altairlinux.org>"]
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Crypto
+ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
+sha2 = "0.10"
+rand = "0.8"
+
+# Archive
+tar = "0.4"
+zstd = "0.13"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Async / HTTP
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+axum = "0.7"
+
+# Utilities
+thiserror = "1"
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+semver = { version = "1", features = ["serde"] }
+hex = "0.4"
+tempfile = "3"
+walkdir = "2"
+fs2 = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+colored = "2"
+indicatif = "0.17"
+dialoguer = "0.11"
+base64 = "0.22"
+url = { version = "2", features = ["serde"] }
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+
+# Workspace crates
+astra-core = { path = "core" }
+astra-resolver = { path = "resolver" }
+astra-db = { path = "db" }
+astra-pkg = { path = "pkg" }
+astra-repo = { path = "repo" }
+astra-repo-server = { path = "repo-server" }
+astra-builder = { path = "builder" }
+astra-crypto = { path = "crypto" }
