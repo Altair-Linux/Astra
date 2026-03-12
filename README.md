@@ -1,7 +1,7 @@
 
 ---
 
-# ![Astra Logo](https://github.com/Altair-Linux/Astra/blob/main/docs/logo.svg) Astra Package Manager
+# Astra Package Manager
 
 [![CI](https://github.com/Altair-Linux/Astra/actions/workflows/ci.yml/badge.svg)](https://github.com/Altair-Linux/Astra/actions)
 [![License](https://img.shields.io/badge/License-ZPL%202.0-blue.svg)](LICENSE)
@@ -297,7 +297,3 @@ Contribution guidelines: [docs/contributing.md](docs/contributing.md)
 </details>
 
 ---
-
-
-
-Do you want me to add that next?
