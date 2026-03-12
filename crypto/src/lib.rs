@@ -1,7 +1,7 @@
-//! # Astra Crypto
+//! # astra crypto
 //!
-//! Cryptographic signing and verification for Astra packages.
-//! Uses Ed25519 signatures for package integrity and authenticity.
+//! handles signing and verifying astra packages with ed25519.
+//! makes sure packages haven't been tampered with.
 
 mod error;
 mod keyring;
@@ -13,7 +13,7 @@ pub use keyring::{KeyPair, KeyRing, PublicKey};
 pub use sign::sign_data;
 pub use verify::verify_signature;
 
-/// Compute SHA-256 hash of data and return hex string.
+/// computes a sha-256 hash and returns it as a hex string.
 pub fn sha256_hex(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();

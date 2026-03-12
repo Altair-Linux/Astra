@@ -2,20 +2,20 @@ use crate::{RepoConfig, RepoError, RepoIndex};
 use astra_crypto::sha256_hex;
 use std::path::Path;
 
-/// Client for interacting with Astra repositories.
+/// client for talking to astra repositories.
 pub struct RepoClient {
     http: reqwest::Client,
 }
 
 impl RepoClient {
-    /// Create a new repository client.
+    /// creates a new repo client.
     pub fn new() -> Self {
         Self {
             http: reqwest::Client::new(),
         }
     }
 
-    /// Fetch the repository index.
+    /// fetches the repository index.
     pub async fn fetch_index(&self, repo: &RepoConfig) -> Result<RepoIndex, RepoError> {
         let url = repo
             .url
@@ -34,7 +34,7 @@ impl RepoClient {
         Ok(index)
     }
 
-    /// Download a package file to the specified path.
+    /// downloads a package file and verifies its checksum.
     pub async fn download_package(
         &self,
         repo: &RepoConfig,
@@ -57,7 +57,7 @@ impl RepoClient {
 
         let bytes = response.bytes().await?;
 
-        // Verify checksum before writing to disk
+        // verify checksum before writing to disk
         let actual_checksum = sha256_hex(&bytes);
         if actual_checksum != expected_checksum {
             return Err(RepoError::ChecksumMismatch {
@@ -75,7 +75,7 @@ impl RepoClient {
         Ok(())
     }
 
-    /// Download a package's signature file.
+    /// downloads a package's signature file.
     pub async fn download_signature(
         &self,
         repo: &RepoConfig,

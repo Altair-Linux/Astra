@@ -3,9 +3,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 use tower_http::services::ServeDir;
 
-/// Serve a repository directory over HTTP.
+/// serves a repository directory over http.
 ///
-/// The directory must contain:
+/// the directory should contain:
 /// - `index.json` — package index
 /// - `packages/` — package files
 /// - `signatures/` — signature files

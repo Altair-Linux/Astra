@@ -1,7 +1,7 @@
-//! # Astra Core
+//! # astra core
 //!
-//! Core package management logic that orchestrates all subsystems:
-//! database, resolver, repository client, crypto, and builder.
+//! the main package management logic that ties everything together:
+//! database, resolver, repo client, crypto, and builder.
 
 mod config;
 mod error;

@@ -3,45 +3,45 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Package metadata stored inside every `.astpkg` file.
+/// metadata stored inside every `.astpkg` file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
-    /// Package name (e.g., "coreutils").
+    /// package name (e.g., "coreutils").
     pub name: String,
-    /// Semantic version.
+    /// semver version.
     pub version: Version,
-    /// Target architecture (e.g., "x86_64", "aarch64", "any").
+    /// target architecture (e.g., "x86_64", "aarch64", "any").
     pub architecture: String,
-    /// Human-readable description.
+    /// short description of what this package does.
     pub description: String,
-    /// Required dependencies.
+    /// packages this one needs to work.
     #[serde(default)]
     pub dependencies: Vec<Dependency>,
-    /// Optional dependencies.
+    /// nice-to-have deps that aren't required.
     #[serde(default)]
     pub optional_dependencies: Vec<Dependency>,
-    /// Conflicting packages.
+    /// packages that can't be installed alongside this one.
     #[serde(default)]
     pub conflicts: Vec<String>,
-    /// Virtual packages this package provides.
+    /// virtual packages this one provides.
     #[serde(default)]
     pub provides: Vec<String>,
-    /// Package maintainer.
+    /// who maintains this package.
     pub maintainer: String,
-    /// License identifier.
+    /// license identifier.
     pub license: String,
-    /// Build timestamp.
+    /// when the package was built.
     pub build_date: DateTime<Utc>,
-    /// Checksums of all included files.
+    /// sha-256 checksums for every file in the package.
     #[serde(default)]
     pub checksums: HashMap<String, Checksum>,
-    /// Package size in bytes (installed).
+    /// total size when installed (bytes).
     #[serde(default)]
     pub installed_size: u64,
 }
 
 impl Metadata {
-    /// Validate that required fields are present and correct.
+    /// makes sure all required fields are present and look right.
     pub fn validate(&self) -> Result<(), crate::PackageError> {
         if self.name.is_empty() {
             return Err(crate::PackageError::InvalidMetadata(
@@ -76,23 +76,26 @@ impl Metadata {
         Ok(())
     }
 
-    /// Full package identifier: "name-version".
+    /// returns "name-version" as a single string.
     pub fn full_name(&self) -> String {
         format!("{}-{}", self.name, self.version)
     }
 
-    /// Package filename: "name-version-arch.astpkg".
+    /// returns the expected filename: "name-version-arch.astpkg".
     pub fn filename(&self) -> String {
-        format!("{}-{}-{}.astpkg", self.name, self.version, self.architecture)
+        format!(
+            "{}-{}-{}.astpkg",
+            self.name, self.version, self.architecture
+        )
     }
 }
 
-/// A package dependency with optional version constraint.
+/// a package dependency with an optional version constraint.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Dependency {
-    /// Package name.
+    /// package name.
     pub name: String,
-    /// Version requirement string (semver range).
+    /// version requirement string (semver range).
     #[serde(default)]
     pub version_req: Option<String>,
 }
@@ -122,16 +125,16 @@ impl std::fmt::Display for Dependency {
     }
 }
 
-/// A checksum entry for a file.
+/// checksum info for a single file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Checksum {
-    /// SHA-256 hash as hex string.
+    /// sha-256 hash as hex string.
     pub sha256: String,
-    /// File size in bytes.
+    /// file size in bytes.
     pub size: u64,
 }
 
-/// Script types that can be included in a package.
+/// script types that can be included in a package.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptType {
@@ -144,7 +147,7 @@ pub enum ScriptType {
 }
 
 impl ScriptType {
-    /// Get the filename for this script type.
+    /// returns the filename for this script type.
     pub fn filename(&self) -> &'static str {
         match self {
             ScriptType::PreInstall => "pre_install.sh",

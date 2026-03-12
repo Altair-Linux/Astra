@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur in the Astra package manager.
+/// things that can go wrong in the astra package manager.
 #[derive(Debug, Error)]
 pub enum AstraError {
     #[error("package error: {0}")]

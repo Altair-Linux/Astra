@@ -3,7 +3,7 @@ use astra_pkg::Dependency;
 use semver::{Version, VersionReq};
 use std::collections::{HashMap, HashSet, VecDeque};
 
-/// A package candidate available for installation.
+/// a package that's available for installation.
 #[derive(Debug, Clone)]
 pub struct PackageCandidate {
     pub name: String,
@@ -14,28 +14,28 @@ pub struct PackageCandidate {
     pub provides: Vec<String>,
 }
 
-/// Result of dependency resolution.
+/// the result of resolving dependencies.
 #[derive(Debug, Clone)]
 pub struct ResolutionResult {
-    /// Packages to install, in topological order.
+    /// packages to install, in topological order.
     pub install_order: Vec<String>,
-    /// Map of package name to selected version.
+    /// map of package name to the version we picked.
     pub selected: HashMap<String, Version>,
 }
 
-/// The dependency resolver.
+/// the dependency resolver.
 ///
-/// Uses a BFS-based forward resolution algorithm.
-/// Architecture allows future replacement with a SAT solver.
+/// uses bfs-based forward resolution.
+/// designed so we can swap in a sat solver later.
 pub struct Resolver {
-    /// Available packages: name -> list of candidates (different versions).
+    /// available packages: name -> list of candidates (different versions).
     available: HashMap<String, Vec<PackageCandidate>>,
-    /// Already installed packages.
+    /// packages that are already installed.
     installed: HashMap<String, Version>,
 }
 
 impl Resolver {
-    /// Create a new resolver.
+    /// creates a new resolver.
     pub fn new() -> Self {
         Self {
             available: HashMap::new(),
@@ -43,7 +43,7 @@ impl Resolver {
         }
     }
 
-    /// Add an available package candidate.
+    /// adds a package candidate to the available pool.
     pub fn add_candidate(&mut self, candidate: PackageCandidate) {
         self.available
             .entry(candidate.name.clone())
@@ -51,24 +51,24 @@ impl Resolver {
             .push(candidate);
     }
 
-    /// Register an already-installed package.
+    /// marks a package as already installed.
     pub fn add_installed(&mut self, name: String, version: Version) {
         self.installed.insert(name, version);
     }
 
-    /// Resolve dependencies for the requested packages.
+    /// resolves dependencies for the requested packages.
     pub fn resolve(&self, requests: &[String]) -> Result<ResolutionResult, ResolverError> {
         let mut selected: HashMap<String, PackageCandidate> = HashMap::new();
         let mut queue: VecDeque<String> = VecDeque::new();
 
-        // Enqueue initial requests
+        // enqueue initial requests
         for name in requests {
             if !self.installed.contains_key(name) {
                 queue.push_back(name.clone());
             }
         }
 
-        // BFS resolution
+        // bfs resolution
         while let Some(name) = queue.pop_front() {
             if selected.contains_key(&name) || self.installed.contains_key(&name) {
                 continue;
@@ -76,7 +76,7 @@ impl Resolver {
 
             let candidate = self.select_best_candidate(&name, None)?;
 
-            // Check conflicts
+            // check for conflicts
             for conflict in &candidate.conflicts {
                 if self.installed.contains_key(conflict) || selected.contains_key(conflict) {
                     return Err(ResolverError::Conflict {
@@ -86,14 +86,14 @@ impl Resolver {
                 }
             }
 
-            // Enqueue dependencies
+            // enqueue deps
             for dep in &candidate.dependencies {
                 if !self.installed.contains_key(&dep.name) && !selected.contains_key(&dep.name) {
-                    // Verify the dependency can be satisfied
+                    // verify the dep can be satisfied
                     self.select_best_candidate(&dep.name, dep.version_req.as_deref())?;
                     queue.push_back(dep.name.clone());
                 } else if let Some(req_str) = &dep.version_req {
-                    // Check installed version satisfies requirement
+                    // check installed version satisfies requirement
                     if let Some(installed_ver) = self.installed.get(&dep.name) {
                         if let Ok(req) = VersionReq::parse(req_str) {
                             if !req.matches(installed_ver) {
@@ -110,7 +110,7 @@ impl Resolver {
             selected.insert(name, candidate);
         }
 
-        // Check for circular dependencies and produce topological order
+        // check for circular deps and build topological order
         let install_order = self.topological_sort(&selected)?;
 
         let selected_versions = selected
@@ -124,16 +124,16 @@ impl Resolver {
         })
     }
 
-    /// Select the best candidate for a package, optionally satisfying a version requirement.
+    /// picks the best candidate for a package, optionally matching a version requirement.
     fn select_best_candidate(
         &self,
         name: &str,
         version_req: Option<&str>,
     ) -> Result<PackageCandidate, ResolverError> {
-        // Check "provides" as well
+        // check "provides" as well
         let candidates = self.available.get(name).or_else(|| {
-            // Look for packages that provide this name
-            for (_, cands) in &self.available {
+            // look for packages that provide this name
+            for cands in self.available.values() {
                 for c in cands {
                     if c.provides.contains(&name.to_string()) {
                         return Some(cands);
@@ -154,26 +154,31 @@ impl Resolver {
             None => VersionReq::STAR,
         };
 
-        // Find the highest version that matches
-        let mut matching: Vec<_> = candidates.iter().filter(|c| req.matches(&c.version)).collect();
+        // find the highest version that matches
+        let mut matching: Vec<_> = candidates
+            .iter()
+            .filter(|c| req.matches(&c.version))
+            .collect();
         matching.sort_by(|a, b| b.version.cmp(&a.version));
 
-        matching.first().cloned().cloned().ok_or_else(|| {
-            ResolverError::NoSatisfyingVersion {
+        matching
+            .first()
+            .cloned()
+            .cloned()
+            .ok_or_else(|| ResolverError::NoSatisfyingVersion {
                 package: name.to_string(),
                 requirement: version_req.unwrap_or("*").to_string(),
-            }
-        })
+            })
     }
 
-    /// Topological sort of selected packages (Kahn's algorithm).
+    /// topological sort using kahn's algorithm.
     fn topological_sort(
         &self,
         selected: &HashMap<String, PackageCandidate>,
     ) -> Result<Vec<String>, ResolverError> {
         let names: HashSet<&String> = selected.keys().collect();
 
-        // Build adjacency: edges from dependency -> dependent
+        // build adjacency: edges from dependency -> dependent
         let mut in_degree: HashMap<&String, usize> = HashMap::new();
         let mut dependents: HashMap<&String, Vec<&String>> = HashMap::new();
 
@@ -185,8 +190,8 @@ impl Resolver {
         for (name, candidate) in selected {
             for dep in &candidate.dependencies {
                 if names.contains(&dep.name) {
-                    *in_degree.entry(&name).or_insert(0) += 1;
-                    dependents.entry(&dep.name).or_default().push(&name);
+                    *in_degree.entry(name).or_insert(0) += 1;
+                    dependents.entry(&dep.name).or_default().push(name);
                 }
             }
         }
@@ -213,7 +218,7 @@ impl Resolver {
         }
 
         if order.len() != names.len() {
-            // Circular dependency detected - find the cycle
+            // circular dependency detected - find the cycle
             let remaining: Vec<String> = names
                 .iter()
                 .filter(|n| !order.contains(n))
@@ -262,11 +267,7 @@ mod tests {
     #[test]
     fn test_already_installed() {
         let mut resolver = Resolver::new();
-        resolver.add_candidate(candidate(
-            "app",
-            "1.0.0",
-            vec![Dependency::new("lib")],
-        ));
+        resolver.add_candidate(candidate("app", "1.0.0", vec![Dependency::new("lib")]));
         resolver.add_installed("lib".into(), Version::new(2, 0, 0));
 
         let result = resolver.resolve(&["app".into()]).unwrap();
@@ -335,25 +336,33 @@ mod tests {
             "1.0.0",
             vec![Dependency::new("lib-a"), Dependency::new("lib-b")],
         ));
-        resolver.add_candidate(candidate(
-            "lib-a",
-            "1.0.0",
-            vec![Dependency::new("common")],
-        ));
-        resolver.add_candidate(candidate(
-            "lib-b",
-            "1.0.0",
-            vec![Dependency::new("common")],
-        ));
+        resolver.add_candidate(candidate("lib-a", "1.0.0", vec![Dependency::new("common")]));
+        resolver.add_candidate(candidate("lib-b", "1.0.0", vec![Dependency::new("common")]));
         resolver.add_candidate(candidate("common", "1.0.0", vec![]));
 
         let result = resolver.resolve(&["app".into()]).unwrap();
         assert_eq!(result.install_order.len(), 4);
         // common must come before lib-a and lib-b
-        let common_pos = result.install_order.iter().position(|n| n == "common").unwrap();
-        let a_pos = result.install_order.iter().position(|n| n == "lib-a").unwrap();
-        let b_pos = result.install_order.iter().position(|n| n == "lib-b").unwrap();
-        let app_pos = result.install_order.iter().position(|n| n == "app").unwrap();
+        let common_pos = result
+            .install_order
+            .iter()
+            .position(|n| n == "common")
+            .unwrap();
+        let a_pos = result
+            .install_order
+            .iter()
+            .position(|n| n == "lib-a")
+            .unwrap();
+        let b_pos = result
+            .install_order
+            .iter()
+            .position(|n| n == "lib-b")
+            .unwrap();
+        let app_pos = result
+            .install_order
+            .iter()
+            .position(|n| n == "app")
+            .unwrap();
         assert!(common_pos < a_pos);
         assert!(common_pos < b_pos);
         assert!(a_pos < app_pos);

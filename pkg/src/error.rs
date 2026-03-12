@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during package operations.
+/// things that can go wrong with package operations.
 #[derive(Debug, Error)]
 pub enum PackageError {
     #[error("invalid package format: {0}")]

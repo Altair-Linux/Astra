@@ -1,7 +1,7 @@
-//! # Astra Repository Server
+//! # astra repository server
 //!
-//! A simple HTTP server for hosting Astra package repositories.
-//! Serves the index, packages, and signatures as static files.
+//! a simple http server for hosting astra package repos.
+//! serves the index, packages, and signatures as static files.
 
 mod server;
 

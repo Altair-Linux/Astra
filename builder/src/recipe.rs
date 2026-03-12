@@ -3,38 +3,38 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
-/// A package build recipe (Astrafile.yaml).
+/// a package build recipe (Astrafile.yaml).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Recipe {
-    /// Package name.
+    /// package name.
     pub name: String,
-    /// Package version string.
+    /// version string.
     pub version: String,
-    /// Target architecture.
+    /// target architecture.
     #[serde(default = "default_arch")]
     pub architecture: String,
-    /// Package description.
+    /// package description.
     pub description: String,
-    /// Package maintainer.
+    /// package maintainer.
     pub maintainer: String,
-    /// Package license.
+    /// package license.
     pub license: String,
-    /// Dependencies.
+    /// dependencies.
     #[serde(default)]
     pub dependencies: Vec<RecipeDependency>,
-    /// Optional dependencies.
+    /// optional dependencies.
     #[serde(default)]
     pub optional_dependencies: Vec<RecipeDependency>,
-    /// Conflicting packages.
+    /// conflicting packages.
     #[serde(default)]
     pub conflicts: Vec<String>,
-    /// Packages this provides.
+    /// packages this provides.
     #[serde(default)]
     pub provides: Vec<String>,
-    /// Install scripts.
+    /// install scripts.
     #[serde(default)]
     pub scripts: HashMap<String, String>,
-    /// Source directory containing files to package (relative to Astrafile.yaml).
+    /// source directory containing files to package (relative to Astrafile.yaml).
     #[serde(default = "default_files_dir")]
     pub files_dir: String,
 }
@@ -52,7 +52,7 @@ fn default_files_dir() -> String {
     "files".to_string()
 }
 
-/// A dependency entry in a recipe.
+/// a dependency entry in a recipe.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecipeDependency {
     pub name: String,
@@ -70,7 +70,7 @@ impl From<&RecipeDependency> for Dependency {
 }
 
 impl Recipe {
-    /// Load a recipe from a YAML file.
+    /// loads a recipe from a yaml file.
     pub fn load(path: &Path) -> Result<Self, crate::BuildError> {
         let content = std::fs::read_to_string(path)?;
         let recipe: Self = serde_yaml::from_str(&content)?;
@@ -78,7 +78,7 @@ impl Recipe {
         Ok(recipe)
     }
 
-    /// Validate the recipe.
+    /// validates the recipe fields.
     pub fn validate(&self) -> Result<(), crate::BuildError> {
         if self.name.is_empty() {
             return Err(crate::BuildError::InvalidRecipe("name is required".into()));
@@ -103,7 +103,7 @@ impl Recipe {
                 "license is required".into(),
             ));
         }
-        // Validate version is valid semver
+        // validate version is valid semver
         semver::Version::parse(&self.version).map_err(|e| {
             crate::BuildError::InvalidRecipe(format!("invalid version '{}': {}", self.version, e))
         })?;

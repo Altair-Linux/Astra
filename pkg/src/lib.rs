@@ -1,7 +1,7 @@
-//! # Astra Package Format
+//! # astra package format
 //!
-//! Defines the `.astpkg` file format: a tar archive compressed with zstd
-//! containing package metadata, files, scripts, and a cryptographic signature.
+//! defines the `.astpkg` file format — a tar archive compressed with zstd
+//! that holds metadata, files, scripts, and a cryptographic signature.
 
 mod error;
 mod metadata;

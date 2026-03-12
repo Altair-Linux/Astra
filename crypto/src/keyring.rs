@@ -6,25 +6,25 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-/// An Ed25519 key pair for signing packages.
+/// an ed25519 key pair used for signing packages.
 #[derive(Clone)]
 pub struct KeyPair {
     signing_key: SigningKey,
 }
 
 impl KeyPair {
-    /// Generate a new random key pair.
+    /// generates a fresh random key pair.
     pub fn generate() -> Self {
         let signing_key = SigningKey::generate(&mut OsRng);
         Self { signing_key }
     }
 
-    /// Export the full keypair as bytes (secret key bytes).
+    /// exports the keypair as raw bytes (secret key).
     pub fn to_bytes(&self) -> [u8; 32] {
         self.signing_key.to_bytes()
     }
 
-    /// Import a keypair from secret key bytes.
+    /// imports a keypair from secret key bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         let bytes: [u8; 32] = bytes
             .try_into()
@@ -33,41 +33,37 @@ impl KeyPair {
         Ok(Self { signing_key })
     }
 
-    /// Get the signing key reference.
+    /// returns a reference to the signing key.
     pub fn signing_key(&self) -> &SigningKey {
         &self.signing_key
     }
 
-    /// Get the public key.
+    /// returns the public key for this keypair.
     pub fn public_key(&self) -> PublicKey {
         PublicKey {
             verifying_key: self.signing_key.verifying_key(),
         }
     }
 
-    /// Save key pair to a file (base64-encoded secret key).
+    /// saves the keypair to a file as base64.
     pub fn save_to_file(&self, path: &Path) -> Result<(), CryptoError> {
-        let encoded = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            self.to_bytes(),
-        );
+        let encoded =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.to_bytes());
         fs::write(path, encoded)?;
         Ok(())
     }
 
-    /// Load key pair from a file.
+    /// loads a keypair from a file.
     pub fn load_from_file(path: &Path) -> Result<Self, CryptoError> {
         let encoded = fs::read_to_string(path)?;
-        let bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            encoded.trim(),
-        )
-        .map_err(|e| CryptoError::InvalidKey(format!("invalid base64: {e}")))?;
+        let bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded.trim())
+                .map_err(|e| CryptoError::InvalidKey(format!("invalid base64: {e}")))?;
         Self::from_bytes(&bytes)
     }
 }
 
-/// An Ed25519 public key for verifying signatures.
+/// an ed25519 public key for verifying package signatures.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PublicKey {
     #[serde(
@@ -81,10 +77,8 @@ fn serialize_verifying_key<S>(key: &VerifyingKey, serializer: S) -> Result<S::Ok
 where
     S: serde::Serializer,
 {
-    let encoded = base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        key.as_bytes(),
-    );
+    let encoded =
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key.as_bytes());
     serializer.serialize_str(&encoded)
 }
 
@@ -102,7 +96,7 @@ where
 }
 
 impl PublicKey {
-    /// Create from raw bytes.
+    /// creates a public key from raw bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CryptoError> {
         let bytes: [u8; 32] = bytes
             .try_into()
@@ -112,89 +106,86 @@ impl PublicKey {
         Ok(Self { verifying_key })
     }
 
-    /// Get the verifying key reference.
+    /// returns a reference to the inner verifying key.
     pub fn verifying_key(&self) -> &VerifyingKey {
         &self.verifying_key
     }
 
-    /// Export as bytes.
+    /// exports as raw bytes.
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.verifying_key.as_bytes()
     }
 
-    /// Export as base64 string.
+    /// exports as a base64 string.
     pub fn to_base64(&self) -> String {
-        base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            self.as_bytes(),
-        )
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.as_bytes())
     }
 
-    /// Import from base64 string.
+    /// imports from a base64 string.
     pub fn from_base64(s: &str) -> Result<Self, CryptoError> {
         let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s.trim())
             .map_err(|e| CryptoError::InvalidKey(format!("invalid base64: {e}")))?;
         Self::from_bytes(&bytes)
     }
 
-    /// Save public key to a file.
+    /// saves the public key to a file.
     pub fn save_to_file(&self, path: &Path) -> Result<(), CryptoError> {
         fs::write(path, self.to_base64())?;
         Ok(())
     }
 
-    /// Load public key from a file.
+    /// loads a public key from a file.
     pub fn load_from_file(path: &Path) -> Result<Self, CryptoError> {
         let encoded = fs::read_to_string(path)?;
         Self::from_base64(&encoded)
     }
 }
 
-/// A collection of trusted public keys.
+/// a collection of trusted public keys.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyRing {
     keys: HashMap<String, PublicKey>,
 }
 
 impl KeyRing {
-    /// Create an empty keyring.
+    /// creates an empty keyring.
     pub fn new() -> Self {
         Self {
             keys: HashMap::new(),
         }
     }
 
-    /// Add a named public key.
+    /// adds a named public key to the keyring.
     pub fn add(&mut self, name: String, key: PublicKey) {
         self.keys.insert(name, key);
     }
 
-    /// Remove a key by name.
+    /// removes a key by name.
     pub fn remove(&mut self, name: &str) -> Option<PublicKey> {
         self.keys.remove(name)
     }
 
-    /// Get a key by name.
+    /// looks up a key by name.
     pub fn get(&self, name: &str) -> Option<&PublicKey> {
         self.keys.get(name)
     }
 
-    /// List all key names.
+    /// lists all key names in the keyring.
     pub fn list(&self) -> Vec<&str> {
         self.keys.keys().map(|s| s.as_str()).collect()
     }
 
-    /// Get all keys.
+    /// returns all keys in the keyring.
     pub fn all_keys(&self) -> &HashMap<String, PublicKey> {
         &self.keys
     }
 
-    /// Check if empty.
+    /// returns true if the keyring has no keys.
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }
 
-    /// Save keyring to a file.
+    /// saves the keyring to a json file.
     pub fn save_to_file(&self, path: &Path) -> Result<(), CryptoError> {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| CryptoError::InvalidKey(format!("serialization error: {e}")))?;
@@ -202,7 +193,7 @@ impl KeyRing {
         Ok(())
     }
 
-    /// Load keyring from a file.
+    /// loads a keyring from a json file.
     pub fn load_from_file(path: &Path) -> Result<Self, CryptoError> {
         let json = fs::read_to_string(path)?;
         let keyring: Self = serde_json::from_str(&json)

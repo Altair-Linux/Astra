@@ -1,6 +1,6 @@
-//! Integration tests for the Astra Package Manager.
+//! integration tests for the astra package manager.
 //!
-//! Tests the full lifecycle: build, create repo, install, verify, remove.
+//! tests the full lifecycle: build, create repo, install, verify, remove.
 
 use astra_builder::Builder;
 use astra_core::{AstraConfig, PackageManager};
@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-// ─── Package Format Tests ──────────────────────────────────────────
+// ─── package format tests ──────────────────────────────────────────
 
 #[test]
 fn test_package_create_read_verify() {
@@ -42,20 +42,20 @@ fn test_package_create_read_verify() {
     package.add_file("etc/test.conf", b"key=value\n".to_vec());
     package.sign(&keypair);
 
-    // Write to buffer
+    // write to buffer
     let mut buf = Vec::new();
     PackageWriter::write(&package, &mut buf).unwrap();
 
-    // Read back
+    // read back
     let pkg2 = PackageReader::read(&buf[..]).unwrap();
     assert_eq!(pkg2.metadata.name, "test-pkg");
     assert_eq!(pkg2.files.len(), 2);
     assert!(pkg2.signature.is_some());
 
-    // Verify
+    // verify
     assert!(pkg2.verify(&keypair.public_key()).is_ok());
 
-    // Verify with wrong key fails
+    // verify with wrong key fails
     let wrong_key = KeyPair::generate();
     assert!(pkg2.verify(&wrong_key.public_key()).is_err());
 }
@@ -90,21 +90,21 @@ fn test_package_write_to_file() {
 
     assert!(pkg_path.exists());
 
-    // Read back from file
+    // read back from file
     let pkg2 = PackageReader::read_from_file(&pkg_path).unwrap();
     assert_eq!(pkg2.metadata.name, "file-test");
     assert!(pkg2.verify(&keypair.public_key()).is_ok());
 
-    // Test metadata-only read
+    // test metadata-only read
     let meta = PackageReader::read_metadata(&pkg_path).unwrap();
     assert_eq!(meta.name, "file-test");
 
-    // Test file checksum
+    // test file checksum
     let checksum = PackageReader::file_checksum(&pkg_path).unwrap();
     assert!(!checksum.is_empty());
 }
 
-// ─── Database Tests ────────────────────────────────────────────────
+// ─── database tests ────────────────────────────────────────────────
 
 #[test]
 fn test_database_full_lifecycle() {
@@ -131,38 +131,38 @@ fn test_database_full_lifecycle() {
         PathBuf::from("etc/db-test.conf"),
     ];
 
-    // Install
+    // install
     db.install_package(&metadata, &files, InstallReason::Explicit)
         .unwrap();
     assert!(db.is_installed("db-test").unwrap());
     assert_eq!(db.package_count().unwrap(), 1);
 
-    // Query
+    // query
     let pkg = db.get_package("db-test").unwrap();
     assert_eq!(pkg.version, Version::new(1, 0, 0));
     assert_eq!(pkg.files.len(), 2);
 
-    // File ownership
+    // file ownership
     let owner = db.find_file_owner("usr/bin/db-test").unwrap();
     assert_eq!(owner.unwrap(), "db-test");
 
-    // Search
+    // search
     let results = db.search_packages("database").unwrap();
     assert_eq!(results.len(), 1);
 
-    // Remove
+    // remove
     let removed = db.remove_package("db-test").unwrap();
     assert_eq!(removed.len(), 2);
     assert!(!db.is_installed("db-test").unwrap());
 }
 
-// ─── Resolver Tests ────────────────────────────────────────────────
+// ─── resolver tests ────────────────────────────────────────────────
 
 #[test]
 fn test_resolver_complex_scenario() {
     let mut resolver = Resolver::new();
 
-    // Setup: app -> lib-a, lib-b; lib-a -> common; lib-b -> common
+    // setup: app -> lib-a, lib-b; lib-a -> common; lib-b -> common
     resolver.add_candidate(PackageCandidate {
         name: "app".into(),
         version: Version::new(1, 0, 0),
@@ -209,7 +209,7 @@ fn test_resolver_complex_scenario() {
 
     let result = resolver.resolve(&["app".into()]).unwrap();
 
-    // Should select common 2.0.0 (highest matching)
+    // should select common 2.0.0 (highest matching)
     assert_eq!(
         result.selected.get("common").unwrap(),
         &Version::new(2, 0, 0)
@@ -230,14 +230,14 @@ fn test_resolver_complex_scenario() {
     assert!(common_pos < app_pos);
 }
 
-// ─── Builder Tests ─────────────────────────────────────────────────
+// ─── builder tests ─────────────────────────────────────────────────
 
 #[test]
 fn test_builder_from_example() {
     let tmp = TempDir::new().unwrap();
     let keypair = KeyPair::generate();
 
-    // Create a minimal package directory
+    // create a minimal package directory
     let pkg_dir = tmp.path().join("test-build");
     std::fs::create_dir_all(pkg_dir.join("files/usr/bin")).unwrap();
     std::fs::write(
@@ -268,32 +268,34 @@ files_dir: files
         .to_string_lossy()
         .ends_with("test-build-1.0.0-x86_64.astpkg"));
 
-    // Verify the built package
+    // verify the built package
     let package = PackageReader::read_from_file(&pkg_path).unwrap();
     assert_eq!(package.metadata.name, "test-build");
     assert_eq!(package.metadata.version, Version::new(1, 0, 0));
-    assert!(package.files.contains_key(&PathBuf::from("usr/bin/test-app")));
+    assert!(package
+        .files
+        .contains_key(&PathBuf::from("usr/bin/test-app")));
     assert!(package.verify(&keypair.public_key()).is_ok());
 }
 
-// ─── Crypto Tests ──────────────────────────────────────────────────
+// ─── crypto tests ──────────────────────────────────────────────────
 
 #[test]
 fn test_key_persistence() {
     let tmp = TempDir::new().unwrap();
     let keypair = KeyPair::generate();
 
-    // Save and load keypair
+    // save and load keypair
     let key_path = tmp.path().join("test.key");
     keypair.save_to_file(&key_path).unwrap();
     let loaded = KeyPair::load_from_file(&key_path).unwrap();
 
-    // Sign with original, verify with loaded
+    // sign with original, verify with loaded
     let data = b"test data for signing";
     let sig = astra_crypto::sign_data(data, &keypair);
     assert!(astra_crypto::verify_signature(data, &sig, &loaded.public_key()).is_ok());
 
-    // Save and load public key
+    // save and load public key
     let pub_path = tmp.path().join("test.pub");
     keypair.public_key().save_to_file(&pub_path).unwrap();
     let loaded_pub = astra_crypto::PublicKey::load_from_file(&pub_path).unwrap();
@@ -320,7 +322,7 @@ fn test_keyring_persistence() {
     assert!(loaded.get("key2").is_some());
 }
 
-// ─── Repository Index Tests ────────────────────────────────────────
+// ─── repository index tests ────────────────────────────────────────
 
 #[test]
 fn test_repo_index_serialization() {
@@ -328,22 +330,20 @@ fn test_repo_index_serialization() {
         name: "test-repo".into(),
         description: "Test repository".into(),
         last_updated: Utc::now().to_rfc3339(),
-        packages: vec![
-            RepoPackageEntry {
-                name: "hello".into(),
-                version: Version::new(1, 0, 0),
-                architecture: "x86_64".into(),
-                description: "Hello package".into(),
-                dependencies: vec![],
-                conflicts: vec![],
-                provides: vec![],
-                checksum: "abc123".into(),
-                filename: "hello-1.0.0-x86_64.astpkg".into(),
-                size: 4096,
-                license: "ZPL-2.0".into(),
-                maintainer: "Test <test@test.com>".into(),
-            },
-        ],
+        packages: vec![RepoPackageEntry {
+            name: "hello".into(),
+            version: Version::new(1, 0, 0),
+            architecture: "x86_64".into(),
+            description: "Hello package".into(),
+            dependencies: vec![],
+            conflicts: vec![],
+            provides: vec![],
+            checksum: "abc123".into(),
+            filename: "hello-1.0.0-x86_64.astpkg".into(),
+            size: 4096,
+            license: "ZPL-2.0".into(),
+            maintainer: "Test <test@test.com>".into(),
+        }],
     };
 
     let json = serde_json::to_string_pretty(&index).unwrap();
@@ -399,7 +399,7 @@ fn test_repo_index_search() {
     assert_eq!(results.len(), 2);
 }
 
-// ─── Full Lifecycle Test ───────────────────────────────────────────
+// ─── full lifecycle test ───────────────────────────────────────────
 
 #[test]
 fn test_full_lifecycle_local() {
@@ -415,15 +415,15 @@ fn test_full_lifecycle_local() {
         repositories: vec![],
     };
 
-    // Initialize
+    // initialize
     let mut mgr = PackageManager::init(config).unwrap();
 
-    // Generate keys
+    // generate keys
     let keypair = mgr.generate_keypair().unwrap();
     let pubkey = keypair.public_key();
     mgr.import_key("test", pubkey).unwrap();
 
-    // Build a package
+    // build a package
     let pkg_dir = tmp.path().join("hello-pkg");
     std::fs::create_dir_all(pkg_dir.join("files/usr/bin")).unwrap();
     std::fs::write(
@@ -448,26 +448,26 @@ license: ZPL-2.0
     let pkg_path = mgr.build(&pkg_dir, &output_dir).unwrap();
     assert!(pkg_path.exists());
 
-    // Install locally
+    // install locally
     let name = mgr.install_local(&pkg_path, false).unwrap();
     assert_eq!(name, "hello");
 
-    // Verify it's installed
+    // verify it's installed
     assert!(mgr.db().is_installed("hello").unwrap());
 
-    // Check files exist
+    // check files exist
     assert!(root.join("usr/bin/hello").exists());
 
-    // Verify integrity
+    // verify integrity
     let issues = mgr.verify_installed("hello").unwrap();
     assert!(issues.is_empty());
 
-    // List
+    // list
     let packages = mgr.db().list_packages().unwrap();
     assert_eq!(packages.len(), 1);
     assert_eq!(packages[0].name, "hello");
 
-    // Remove
+    // remove
     let files = mgr.remove("hello").unwrap();
     assert!(!files.is_empty());
     assert!(!mgr.db().is_installed("hello").unwrap());

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during repository operations.
+/// things that can go wrong during repo operations.
 #[derive(Debug, Error)]
 pub enum RepoError {
     #[error("repository not found: {0}")]

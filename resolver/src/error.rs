@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during dependency resolution.
+/// things that can go wrong during dependency resolution.
 #[derive(Debug, Error)]
 pub enum ResolverError {
     #[error("package not found: {0}")]

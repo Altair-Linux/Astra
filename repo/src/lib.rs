@@ -1,7 +1,7 @@
-//! # Astra Repository Client
+//! # astra repository client
 //!
-//! Handles communication with remote Astra package repositories.
-//! Downloads package indices, fetches packages, and verifies checksums.
+//! talks to remote astra package repositories.
+//! downloads package indices, fetches packages, and verifies checksums.
 
 mod client;
 mod error;

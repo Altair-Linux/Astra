@@ -4,24 +4,24 @@ use std::path::PathBuf;
 
 mod commands;
 
-/// Astra Package Manager — Modern package manager for Altair Linux
+/// astra package manager — modern package manager for altair linux
 #[derive(Parser)]
 #[command(name = "astra", version, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
-    /// Output in JSON format
+    /// output in json format
     #[arg(long, global = true)]
     json: bool,
 
-    /// Enable verbose output
+    /// enable verbose output
     #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Astra data directory
+    /// astra data directory
     #[arg(long, global = true, default_value = "/var/lib/astra")]
     data_dir: PathBuf,
 
-    /// Root filesystem directory
+    /// root filesystem directory
     #[arg(long, global = true, default_value = "/")]
     root: PathBuf,
 
@@ -31,79 +31,79 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new Astra system
+    /// initialize a new astra system
     Init,
 
-    /// Manage repositories
+    /// manage repositories
     Repo {
         #[command(subcommand)]
         action: RepoAction,
     },
 
-    /// Update package indices from repositories
+    /// update package indices from repositories
     Update,
 
-    /// Search for packages
+    /// search for packages
     Search {
-        /// Search query
+        /// search query
         query: String,
     },
 
-    /// Show detailed package information
+    /// show detailed package information
     Info {
-        /// Package name
+        /// package name
         package: String,
     },
 
-    /// Install packages
+    /// install packages
     Install {
-        /// Package names to install
+        /// package names to install
         packages: Vec<String>,
 
-        /// Install from a local .astpkg file
+        /// install from a local .astpkg file
         #[arg(long)]
         local: bool,
     },
 
-    /// Remove packages
+    /// remove packages
     Remove {
-        /// Package names to remove
+        /// package names to remove
         packages: Vec<String>,
     },
 
-    /// Upgrade all packages
+    /// upgrade all packages
     Upgrade,
 
-    /// List installed packages
+    /// list installed packages
     List,
 
-    /// Verify installed package integrity
+    /// verify installed package integrity
     Verify {
-        /// Package name to verify
+        /// package name to verify
         package: String,
     },
 
-    /// Build a package from a directory
+    /// build a package from a directory
     Build {
-        /// Directory containing Astrafile.yaml
+        /// directory containing Astrafile.yaml
         directory: PathBuf,
 
-        /// Output directory for built package
+        /// output directory for built package
         #[arg(short, long, default_value = ".")]
         output: PathBuf,
     },
 
-    /// Serve a repository directory over HTTP
+    /// serve a repository directory over http
     ServeRepo {
-        /// Repository directory
+        /// repository directory
         directory: PathBuf,
 
-        /// Bind address
+        /// bind address
         #[arg(short, long, default_value = "0.0.0.0:8080")]
         bind: String,
     },
 
-    /// Manage cryptographic keys
+    /// manage cryptographic keys
     Key {
         #[command(subcommand)]
         action: KeyAction,
@@ -112,40 +112,40 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum RepoAction {
-    /// Add a new repository
+    /// add a new repository
     Add {
-        /// Repository name
+        /// repository name
         name: String,
-        /// Repository URL
+        /// repository url
         url: String,
     },
-    /// Remove a repository
+    /// remove a repository
     Remove {
-        /// Repository name
+        /// repository name
         name: String,
     },
-    /// List configured repositories
+    /// list configured repositories
     List,
 }
 
 #[derive(Subcommand)]
 enum KeyAction {
-    /// Generate a new signing key pair
+    /// generate a new signing key pair
     Generate,
-    /// Import a public key
+    /// import a public key
     Import {
-        /// Key name
+        /// key name
         name: String,
-        /// Path to public key file
+        /// path to public key file
         path: PathBuf,
     },
-    /// Export the public key
+    /// export the public key
     Export {
-        /// Output file path
+        /// output file path
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// List trusted keys
+    /// list trusted keys
     List,
 }
 
@@ -153,9 +153,15 @@ enum KeyAction {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let Cli { json, verbose, data_dir, root, command } = cli;
+    let Cli {
+        json,
+        verbose,
+        data_dir,
+        root,
+        command,
+    } = cli;
 
-    // Setup tracing
+    // set up tracing
     let filter = if verbose {
         "astra=debug,astra_core=debug,astra_repo=debug,astra_builder=debug"
     } else {
@@ -166,8 +172,14 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    // Reconstruct a Cli without the command for passing to handlers
-    let cli = Cli { json, verbose, data_dir, root, command: Commands::Init };
+    // reconstruct a cli without the command for passing to handlers
+    let cli = Cli {
+        json,
+        verbose,
+        data_dir,
+        root,
+        command: Commands::Init,
+    };
 
     match command {
         Commands::Init => commands::init(&cli).await,
@@ -179,16 +191,12 @@ async fn main() -> Result<()> {
         Commands::Update => commands::update(&cli).await,
         Commands::Search { query } => commands::search(&cli, &query).await,
         Commands::Info { package } => commands::info(&cli, &package).await,
-        Commands::Install { packages, local } => {
-            commands::install(&cli, &packages, local).await
-        }
+        Commands::Install { packages, local } => commands::install(&cli, &packages, local).await,
         Commands::Remove { packages } => commands::remove(&cli, &packages).await,
         Commands::Upgrade => commands::upgrade(&cli).await,
         Commands::List => commands::list(&cli).await,
         Commands::Verify { package } => commands::verify(&cli, &package).await,
-        Commands::Build { directory, output } => {
-            commands::build(&cli, &directory, &output).await
-        }
+        Commands::Build { directory, output } => commands::build(&cli, &directory, &output).await,
         Commands::ServeRepo { directory, bind } => {
             commands::serve_repo(&cli, &directory, &bind).await
         }

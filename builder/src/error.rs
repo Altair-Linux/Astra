@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during package building.
+/// things that can go wrong during package building.
 #[derive(Debug, Error)]
 pub enum BuildError {
     #[error("recipe not found: {0}")]

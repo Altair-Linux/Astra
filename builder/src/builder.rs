@@ -7,11 +7,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-/// The package builder.
+/// the package builder.
 pub struct Builder;
 
 impl Builder {
-    /// Build a package from a directory containing an Astrafile.yaml.
+    /// builds a package from a directory containing an Astrafile.yaml.
     pub fn build(
         pkg_dir: &Path,
         keypair: &KeyPair,
@@ -27,7 +27,7 @@ impl Builder {
         let recipe = Recipe::load(&recipe_path)?;
         tracing::info!("Building package: {} v{}", recipe.name, recipe.version);
 
-        // Collect files
+        // collect files
         let files_dir = pkg_dir.join(&recipe.files_dir);
         let mut files: HashMap<PathBuf, Vec<u8>> = HashMap::new();
 
@@ -41,14 +41,14 @@ impl Builder {
                         .strip_prefix(&files_dir)
                         .map_err(|e| BuildError::BuildFailed(format!("path error: {e}")))?;
                     let content = std::fs::read(entry.path())?;
-                    // Normalize to forward slashes for cross-platform consistency
+                    // normalize to forward slashes for cross-platform consistency
                     let normalized = PathBuf::from(rel_path.to_string_lossy().replace('\\', "/"));
                     files.insert(normalized, content);
                 }
             }
         }
 
-        // Build metadata
+        // build metadata
         let metadata = Metadata {
             name: recipe.name.clone(),
             version: Version::parse(&recipe.version)
@@ -70,13 +70,13 @@ impl Builder {
             installed_size: 0,
         };
 
-        // Create package
+        // create package
         let mut package = Package::new(metadata);
         for (path, content) in files {
             package.add_file(path, content);
         }
 
-        // Add scripts
+        // add scripts
         for (script_name, script_content) in &recipe.scripts {
             let script_type = match script_name.as_str() {
                 "pre_install" => ScriptType::PreInstall,
@@ -93,11 +93,11 @@ impl Builder {
             package.add_script(script_type, script_content.clone());
         }
 
-        // Sign
+        // sign it
         package.sign(keypair);
         tracing::info!("Package signed successfully");
 
-        // Write package
+        // write it out
         std::fs::create_dir_all(output_dir)?;
         let output_path = output_dir.join(package.metadata.filename());
         PackageWriter::write_to_file(&package, &output_path)?;

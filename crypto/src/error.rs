@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during cryptographic operations.
+/// things that can go wrong during crypto operations.
 #[derive(Debug, Error)]
 pub enum CryptoError {
     #[error("signature verification failed")]

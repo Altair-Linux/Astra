@@ -24,13 +24,16 @@ fn open_manager(cli: &Cli) -> Result<PackageManager> {
     Ok(PackageManager::open(config)?)
 }
 
-// ─── Init ──────────────────────────────────────────────────────────
+// ─── init ──────────────────────────────────────────────────────────
 
 pub async fn init(cli: &Cli) -> Result<()> {
     let config = make_config(cli);
     PackageManager::init(config)?;
     if cli.json {
-        println!(r#"{{"status":"initialized","data_dir":"{}"}}"#, cli.data_dir.display());
+        println!(
+            r#"{{"status":"initialized","data_dir":"{}"}}"#,
+            cli.data_dir.display()
+        );
     } else {
         println!(
             "{} Astra initialized at {}",
@@ -41,7 +44,7 @@ pub async fn init(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-// ─── Repository ────────────────────────────────────────────────────
+// ─── repository ────────────────────────────────────────────────────
 
 pub async fn repo_add(cli: &Cli, name: &str, url: &str) -> Result<()> {
     let mut mgr = open_manager(cli)?;
@@ -49,7 +52,12 @@ pub async fn repo_add(cli: &Cli, name: &str, url: &str) -> Result<()> {
     if cli.json {
         println!(r#"{{"status":"added","name":"{name}","url":"{url}"}}"#);
     } else {
-        println!("{} Repository '{}' added: {}", "✓".green().bold(), name, url);
+        println!(
+            "{} Repository '{}' added: {}",
+            "✓".green().bold(),
+            name,
+            url
+        );
     }
     Ok(())
 }
@@ -86,13 +94,16 @@ pub async fn repo_list(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-// ─── Update ────────────────────────────────────────────────────────
+// ─── update ────────────────────────────────────────────────────────
 
 pub async fn update(cli: &Cli) -> Result<()> {
     let mut mgr = open_manager(cli)?;
     let updated = mgr.update().await?;
     if cli.json {
-        println!(r#"{{"status":"updated","repositories":{}}}"#, serde_json::to_string(&updated)?);
+        println!(
+            r#"{{"status":"updated","repositories":{}}}"#,
+            serde_json::to_string(&updated)?
+        );
     } else if updated.is_empty() {
         println!("No repositories to update.");
     } else {
@@ -103,7 +114,7 @@ pub async fn update(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-// ─── Search ────────────────────────────────────────────────────────
+// ─── search ────────────────────────────────────────────────────────
 
 pub async fn search(cli: &Cli, query: &str) -> Result<()> {
     let mut mgr = open_manager(cli)?;
@@ -112,12 +123,14 @@ pub async fn search(cli: &Cli, query: &str) -> Result<()> {
     if cli.json {
         let entries: Vec<_> = results
             .iter()
-            .map(|(repo, e)| serde_json::json!({
-                "repo": repo,
-                "name": e.name,
-                "version": e.version.to_string(),
-                "description": e.description,
-            }))
+            .map(|(repo, e)| {
+                serde_json::json!({
+                    "repo": repo,
+                    "name": e.name,
+                    "version": e.version.to_string(),
+                    "description": e.description,
+                })
+            })
             .collect();
         println!("{}", serde_json::to_string_pretty(&entries)?);
     } else if results.is_empty() {
@@ -125,7 +138,11 @@ pub async fn search(cli: &Cli, query: &str) -> Result<()> {
     } else {
         for (repo, entry) in &results {
             let installed = mgr.db().is_installed(&entry.name).unwrap_or(false);
-            let marker = if installed { " [installed]".green() } else { "".into() };
+            let marker = if installed {
+                " [installed]".green()
+            } else {
+                "".into()
+            };
             println!(
                 "{}/{} {} — {}{}",
                 repo.dimmed(),
@@ -139,38 +156,44 @@ pub async fn search(cli: &Cli, query: &str) -> Result<()> {
     Ok(())
 }
 
-// ─── Info ──────────────────────────────────────────────────────────
+// ─── info ──────────────────────────────────────────────────────────
 
 pub async fn info(cli: &Cli, name: &str) -> Result<()> {
     let mut mgr = open_manager(cli)?;
     mgr.load_cached_indices()?;
 
-    // Check installed first
+    // check installed first
     let installed = mgr.db().get_package(name).ok();
 
-    // Check repos
+    // check repos
     let repo_info = mgr.info(name);
 
     if cli.json {
         let mut obj = serde_json::Map::new();
         if let Some(ref pkg) = installed {
-            obj.insert("installed".into(), serde_json::json!({
-                "name": pkg.name,
-                "version": pkg.version.to_string(),
-                "architecture": pkg.architecture,
-                "description": pkg.description,
-                "install_date": pkg.install_date.to_rfc3339(),
-                "installed_size": pkg.installed_size,
-                "files": pkg.files.len(),
-            }));
+            obj.insert(
+                "installed".into(),
+                serde_json::json!({
+                    "name": pkg.name,
+                    "version": pkg.version.to_string(),
+                    "architecture": pkg.architecture,
+                    "description": pkg.description,
+                    "install_date": pkg.install_date.to_rfc3339(),
+                    "installed_size": pkg.installed_size,
+                    "files": pkg.files.len(),
+                }),
+            );
         }
         if let Some((repo, entry)) = &repo_info {
-            obj.insert("available".into(), serde_json::json!({
-                "repo": repo,
-                "name": entry.name,
-                "version": entry.version.to_string(),
-                "description": entry.description,
-            }));
+            obj.insert(
+                "available".into(),
+                serde_json::json!({
+                    "repo": repo,
+                    "name": entry.name,
+                    "version": entry.version.to_string(),
+                    "description": entry.description,
+                }),
+            );
         }
         println!("{}", serde_json::to_string_pretty(&obj)?);
     } else {
@@ -182,7 +205,10 @@ pub async fn info(cli: &Cli, name: &str) -> Result<()> {
             println!("  Description:  {}", pkg.description);
             println!("  Maintainer:   {}", pkg.maintainer);
             println!("  License:      {}", pkg.license);
-            println!("  Installed:    {}", pkg.install_date.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!(
+                "  Installed:    {}",
+                pkg.install_date.format("%Y-%m-%d %H:%M:%S UTC")
+            );
             println!("  Size:         {} bytes", pkg.installed_size);
             println!("  Files:        {}", pkg.files.len());
         }
@@ -205,7 +231,7 @@ pub async fn info(cli: &Cli, name: &str) -> Result<()> {
     Ok(())
 }
 
-// ─── Install ───────────────────────────────────────────────────────
+// ─── install ───────────────────────────────────────────────────────
 
 pub async fn install(cli: &Cli, packages: &[String], local: bool) -> Result<()> {
     let mut mgr = open_manager(cli)?;
@@ -217,13 +243,20 @@ pub async fn install(cli: &Cli, packages: &[String], local: bool) -> Result<()> 
             if cli.json {
                 println!(r#"{{"status":"installed","package":"{name}"}}"#);
             } else {
-                println!("{} Installed '{}' from local file", "✓".green().bold(), name);
+                println!(
+                    "{} Installed '{}' from local file",
+                    "✓".green().bold(),
+                    name
+                );
             }
         }
     } else {
         let installed = mgr.install(packages).await?;
         if cli.json {
-            println!(r#"{{"status":"installed","packages":{}}}"#, serde_json::to_string(&installed)?);
+            println!(
+                r#"{{"status":"installed","packages":{}}}"#,
+                serde_json::to_string(&installed)?
+            );
         } else {
             for name in &installed {
                 println!("{} Installed '{}'", "✓".green().bold(), name);
@@ -238,7 +271,7 @@ pub async fn install(cli: &Cli, packages: &[String], local: bool) -> Result<()> 
     Ok(())
 }
 
-// ─── Remove ────────────────────────────────────────────────────────
+// ─── remove ────────────────────────────────────────────────────────
 
 pub async fn remove(cli: &Cli, packages: &[String]) -> Result<()> {
     let mut mgr = open_manager(cli)?;
@@ -261,7 +294,7 @@ pub async fn remove(cli: &Cli, packages: &[String]) -> Result<()> {
     Ok(())
 }
 
-// ─── Upgrade ───────────────────────────────────────────────────────
+// ─── upgrade ───────────────────────────────────────────────────────
 
 pub async fn upgrade(cli: &Cli) -> Result<()> {
     let mut mgr = open_manager(cli)?;
@@ -306,7 +339,7 @@ pub async fn upgrade(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-// ─── List ──────────────────────────────────────────────────────────
+// ─── list ──────────────────────────────────────────────────────────
 
 pub async fn list(cli: &Cli) -> Result<()> {
     let mgr = open_manager(cli)?;
@@ -314,13 +347,15 @@ pub async fn list(cli: &Cli) -> Result<()> {
     if cli.json {
         let entries: Vec<_> = packages
             .iter()
-            .map(|p| serde_json::json!({
-                "name": p.name,
-                "version": p.version.to_string(),
-                "architecture": p.architecture,
-                "description": p.description,
-                "install_date": p.install_date.to_rfc3339(),
-            }))
+            .map(|p| {
+                serde_json::json!({
+                    "name": p.name,
+                    "version": p.version.to_string(),
+                    "architecture": p.architecture,
+                    "description": p.description,
+                    "install_date": p.install_date.to_rfc3339(),
+                })
+            })
             .collect();
         println!("{}", serde_json::to_string_pretty(&entries)?);
     } else if packages.is_empty() {
@@ -343,7 +378,7 @@ pub async fn list(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-// ─── Verify ────────────────────────────────────────────────────────
+// ─── verify ────────────────────────────────────────────────────────
 
 pub async fn verify(cli: &Cli, name: &str) -> Result<()> {
     let mgr = open_manager(cli)?;
@@ -375,16 +410,13 @@ pub async fn verify(cli: &Cli, name: &str) -> Result<()> {
     Ok(())
 }
 
-// ─── Build ─────────────────────────────────────────────────────────
+// ─── build ─────────────────────────────────────────────────────────
 
 pub async fn build(cli: &Cli, directory: &Path, output: &Path) -> Result<()> {
     let mgr = open_manager(cli)?;
     let pkg_path = mgr.build(directory, output)?;
     if cli.json {
-        println!(
-            r#"{{"status":"built","path":"{}"}}"#,
-            pkg_path.display()
-        );
+        println!(r#"{{"status":"built","path":"{}"}}"#, pkg_path.display());
     } else {
         println!(
             "{} Package built: {}",
@@ -395,7 +427,7 @@ pub async fn build(cli: &Cli, directory: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-// ─── Serve Repository ──────────────────────────────────────────────
+// ─── serve repository ──────────────────────────────────────────────
 
 pub async fn serve_repo(_cli: &Cli, directory: &Path, bind: &str) -> Result<()> {
     let addr: std::net::SocketAddr = bind.parse()?;
@@ -409,7 +441,7 @@ pub async fn serve_repo(_cli: &Cli, directory: &Path, bind: &str) -> Result<()> 
     Ok(())
 }
 
-// ─── Key Management ────────────────────────────────────────────────
+// ─── key management ────────────────────────────────────────────────
 
 pub async fn key_generate(cli: &Cli) -> Result<()> {
     let mgr = open_manager(cli)?;

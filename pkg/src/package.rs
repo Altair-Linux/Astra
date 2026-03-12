@@ -5,21 +5,21 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
-/// An in-memory representation of an Astra package.
+/// in-memory representation of an astra package.
 #[derive(Debug, Clone)]
 pub struct Package {
-    /// Package metadata.
+    /// package metadata.
     pub metadata: Metadata,
-    /// Files included in the package (relative path -> content).
+    /// files included in the package (relative path -> content).
     pub files: HashMap<PathBuf, Vec<u8>>,
-    /// Install scripts.
+    /// install/remove scripts.
     pub scripts: HashMap<ScriptType, String>,
-    /// Ed25519 signature over the package content.
+    /// ed25519 signature over the package content.
     pub signature: Option<Vec<u8>>,
 }
 
 impl Package {
-    /// Create a new package with the given metadata.
+    /// creates a new package with the given metadata.
     pub fn new(metadata: Metadata) -> Self {
         Self {
             metadata,
@@ -29,17 +29,17 @@ impl Package {
         }
     }
 
-    /// Add a file to the package.
+    /// adds a file to the package.
     pub fn add_file(&mut self, path: impl Into<PathBuf>, content: Vec<u8>) {
         self.files.insert(path.into(), content);
     }
 
-    /// Add an install script.
+    /// adds an install script.
     pub fn add_script(&mut self, script_type: ScriptType, content: String) {
         self.scripts.insert(script_type, content);
     }
 
-    /// Compute checksums for all files and update metadata.
+    /// computes sha-256 checksums for all files and updates metadata.
     pub fn compute_checksums(&mut self) {
         self.metadata.checksums.clear();
         let mut total_size = 0u64;
@@ -49,22 +49,19 @@ impl Package {
             total_size += size;
             self.metadata.checksums.insert(
                 path.to_string_lossy().replace('\\', "/"),
-                Checksum {
-                    sha256: hash,
-                    size,
-                },
+                Checksum { sha256: hash, size },
             );
         }
         self.metadata.installed_size = total_size;
     }
 
-    /// Compute the signable content: SHA-256 of metadata + all file hashes.
+    /// builds the signable content: a hash of metadata + file contents + scripts.
     pub fn signable_content(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
-        // Hash metadata JSON (deterministic via sorted keys)
+        // hash the metadata json (deterministic with sorted keys)
         let meta_json = serde_json::to_string(&self.metadata).unwrap();
         hasher.update(meta_json.as_bytes());
-        // Hash all file contents in sorted order for determinism
+        // hash all file contents in sorted order for consistency
         let mut paths: Vec<_> = self.files.keys().collect();
         paths.sort();
         for path in paths {
@@ -72,7 +69,7 @@ impl Package {
             hasher.update(path.to_string_lossy().replace('\\', "/").as_bytes());
             hasher.update(content);
         }
-        // Hash scripts in sorted order
+        // hash scripts in sorted order
         let mut script_types: Vec<_> = self.scripts.keys().collect();
         script_types.sort_by_key(|s| s.filename());
         for st in script_types {
@@ -82,14 +79,14 @@ impl Package {
         hasher.finalize().to_vec()
     }
 
-    /// Sign this package with a key pair.
+    /// signs this package with a keypair.
     pub fn sign(&mut self, keypair: &astra_crypto::KeyPair) {
         self.compute_checksums();
         let content = self.signable_content();
         self.signature = Some(astra_crypto::sign_data(&content, keypair));
     }
 
-    /// Verify the package signature.
+    /// verifies the package signature against a public key.
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), PackageError> {
         let sig = self
             .signature
@@ -101,23 +98,23 @@ impl Package {
     }
 }
 
-/// Writes a `Package` to the `.astpkg` format (tar + zstd).
+/// writes a `Package` to the `.astpkg` format (tar + zstd).
 pub struct PackageWriter;
 
 impl PackageWriter {
-    /// Write a package to a file.
+    /// writes a package to a file.
     pub fn write_to_file(package: &Package, path: &Path) -> Result<(), PackageError> {
         let file = std::fs::File::create(path)?;
         Self::write(package, file)
     }
 
-    /// Write a package to any writer.
+    /// writes a package to any writer.
     pub fn write<W: Write>(package: &Package, writer: W) -> Result<(), PackageError> {
         let encoder = zstd::Encoder::new(writer, 3)?;
         let encoder = encoder.auto_finish();
         let mut archive = tar::Builder::new(encoder);
 
-        // Write metadata.json
+        // write metadata.json
         let meta_bytes = serde_json::to_vec_pretty(&package.metadata)?;
         let mut header = tar::Header::new_gnu();
         header.set_path("metadata.json")?;
@@ -126,13 +123,14 @@ impl PackageWriter {
         header.set_cksum();
         archive.append(&header, &meta_bytes[..])?;
 
-        // Write files/ directory entries in sorted order
+        // write files/ entries in sorted order
         let mut paths: Vec<_> = package.files.keys().collect();
         paths.sort();
         for file_path in paths {
             let content = &package.files[file_path];
-            // Use forward slashes for tar compatibility
-            let archive_path_str = format!("files/{}", file_path.to_string_lossy().replace('\\', "/"));
+            // use forward slashes for tar compatibility
+            let archive_path_str =
+                format!("files/{}", file_path.to_string_lossy().replace('\\', "/"));
             let mut header = tar::Header::new_gnu();
             header.set_path(&archive_path_str)?;
             header.set_size(content.len() as u64);
@@ -141,7 +139,7 @@ impl PackageWriter {
             archive.append(&header, &content[..])?;
         }
 
-        // Write scripts/
+        // write scripts/
         let mut script_types: Vec<_> = package.scripts.keys().collect();
         script_types.sort_by_key(|s| s.filename());
         for script_type in script_types {
@@ -155,7 +153,7 @@ impl PackageWriter {
             archive.append(&header, content.as_bytes())?;
         }
 
-        // Write signature
+        // write signature
         if let Some(ref sig) = package.signature {
             let mut header = tar::Header::new_gnu();
             header.set_path("signature")?;
@@ -170,17 +168,17 @@ impl PackageWriter {
     }
 }
 
-/// Reads a `Package` from the `.astpkg` format (tar + zstd).
+/// reads a `Package` from the `.astpkg` format (tar + zstd).
 pub struct PackageReader;
 
 impl PackageReader {
-    /// Read a package from a file.
+    /// reads a package from a file.
     pub fn read_from_file(path: &Path) -> Result<Package, PackageError> {
         let file = std::fs::File::open(path)?;
         Self::read(file)
     }
 
-    /// Read a package from any reader.
+    /// reads a package from any reader.
     pub fn read<R: Read>(reader: R) -> Result<Package, PackageError> {
         let decoder = zstd::Decoder::new(reader)?;
         let mut archive = tar::Archive::new(decoder);
@@ -207,10 +205,9 @@ impl PackageReader {
                     files.insert(PathBuf::from(file_path), content);
                 }
             } else if let Some(script_name) = path_str.strip_prefix("scripts/") {
-                let script_content =
-                    String::from_utf8(content).map_err(|e| {
-                        PackageError::InvalidFormat(format!("script is not valid UTF-8: {e}"))
-                    })?;
+                let script_content = String::from_utf8(content).map_err(|e| {
+                    PackageError::InvalidFormat(format!("script is not valid UTF-8: {e}"))
+                })?;
                 let script_type = match script_name {
                     "pre_install.sh" => ScriptType::PreInstall,
                     "post_install.sh" => ScriptType::PostInstall,
@@ -235,7 +232,7 @@ impl PackageReader {
         })
     }
 
-    /// Read only the metadata from a package file (without extracting all files).
+    /// reads just the metadata from a package file without extracting everything.
     pub fn read_metadata(path: &Path) -> Result<Metadata, PackageError> {
         let file = std::fs::File::open(path)?;
         let decoder = zstd::Decoder::new(file)?;
@@ -256,7 +253,7 @@ impl PackageReader {
         Err(PackageError::MissingMetadata)
     }
 
-    /// Compute the SHA-256 hash of a package file.
+    /// computes the sha-256 hash of a package file.
     pub fn file_checksum(path: &Path) -> Result<String, PackageError> {
         let mut file = std::fs::File::open(path)?;
         let mut hasher = Sha256::new();

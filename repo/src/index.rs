@@ -3,14 +3,14 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-/// Configuration for a repository source.
+/// config for a repository source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoConfig {
-    /// Human-readable name.
+    /// human-readable name.
     pub name: String,
-    /// Base URL of the repository.
+    /// base url of the repository.
     pub url: Url,
-    /// Whether this repository is enabled.
+    /// whether this repo is enabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
 }
@@ -19,33 +19,33 @@ fn default_true() -> bool {
     true
 }
 
-/// Repository package index.
+/// the package index for a repository.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoIndex {
-    /// Repository name.
+    /// repo name.
     pub name: String,
-    /// Repository description.
+    /// repo description.
     #[serde(default)]
     pub description: String,
-    /// Last update timestamp.
+    /// when the index was last updated.
     #[serde(default)]
     pub last_updated: String,
-    /// Available packages.
+    /// packages available in this repo.
     pub packages: Vec<RepoPackageEntry>,
 }
 
 impl RepoIndex {
-    /// Find a package entry by name.
+    /// finds a package entry by name.
     pub fn find_package(&self, name: &str) -> Option<&RepoPackageEntry> {
         self.packages.iter().find(|p| p.name == name)
     }
 
-    /// Find all versions of a package.
+    /// finds all versions of a package.
     pub fn find_all_versions(&self, name: &str) -> Vec<&RepoPackageEntry> {
         self.packages.iter().filter(|p| p.name == name).collect()
     }
 
-    /// Search packages by name or description.
+    /// searches packages by name or description.
     pub fn search(&self, query: &str) -> Vec<&RepoPackageEntry> {
         let query_lower = query.to_lowercase();
         self.packages
@@ -58,36 +58,36 @@ impl RepoIndex {
     }
 }
 
-/// An entry in the repository index for a single package.
+/// a single package entry in the repo index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoPackageEntry {
-    /// Package name.
+    /// package name.
     pub name: String,
-    /// Package version.
+    /// package version.
     pub version: Version,
-    /// Target architecture.
+    /// target architecture.
     pub architecture: String,
-    /// Description.
+    /// description.
     pub description: String,
-    /// Dependencies.
+    /// dependencies.
     #[serde(default)]
     pub dependencies: Vec<Dependency>,
-    /// Conflicts.
+    /// conflicts.
     #[serde(default)]
     pub conflicts: Vec<String>,
-    /// Provides.
+    /// provides.
     #[serde(default)]
     pub provides: Vec<String>,
-    /// SHA-256 checksum of the package file.
+    /// sha-256 checksum of the package file.
     pub checksum: String,
-    /// Download filename (relative to packages/).
+    /// download filename (relative to packages/).
     pub filename: String,
-    /// Package size in bytes.
+    /// package size in bytes.
     pub size: u64,
-    /// License.
+    /// license.
     #[serde(default)]
     pub license: String,
-    /// Maintainer.
+    /// maintainer.
     #[serde(default)]
     pub maintainer: String,
 }

@@ -1,7 +1,7 @@
-//! # Astra Package Builder
+//! # astra package builder
 //!
-//! Reads an `Astrafile.yaml` recipe, assembles the filesystem layout,
-//! generates metadata, creates the `.astpkg` archive, and signs it.
+//! reads an `Astrafile.yaml` recipe, collects the files,
+//! builds metadata, creates the `.astpkg` archive, and signs it.
 
 mod builder;
 mod error;

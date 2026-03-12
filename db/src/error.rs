@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during database operations.
+/// things that can go wrong with database operations.
 #[derive(Debug, Error)]
 pub enum DbError {
     #[error("database error: {0}")]

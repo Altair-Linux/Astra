@@ -1,7 +1,7 @@
 use crate::{CryptoError, PublicKey};
 use ed25519_dalek::{Signature, Verifier};
 
-/// Verify an Ed25519 signature against data and a public key.
+/// checks an ed25519 signature against the data and public key.
 pub fn verify_signature(
     data: &[u8],
     signature_bytes: &[u8],

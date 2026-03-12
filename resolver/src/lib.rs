@@ -1,8 +1,8 @@
-//! # Astra Dependency Resolver
+//! # astra dependency resolver
 //!
-//! Deterministic dependency resolution with conflict detection,
-//! circular dependency detection, and optional dependency support.
-//! Designed to allow future SAT solver replacement.
+//! deterministic dependency resolution with conflict detection,
+//! cycle detection, and optional dependency support.
+//! built to be replaceable with a sat solver later.
 
 mod error;
 mod resolver;

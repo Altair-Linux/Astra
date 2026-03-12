@@ -10,18 +10,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
 
-/// The main package manager that orchestrates all operations.
+/// the main package manager that coordinates everything.
 pub struct PackageManager {
     config: AstraConfig,
     db: Database,
     keyring: KeyRing,
     repo_client: RepoClient,
-    /// Cached repository indices.
+    /// cached repo indices.
     indices: HashMap<String, RepoIndex>,
 }
 
 impl PackageManager {
-    /// Initialize a new Astra system at the given root.
+    /// sets up a fresh astra system at the given root.
     pub fn init(config: AstraConfig) -> Result<Self, AstraError> {
         std::fs::create_dir_all(&config.data_dir)?;
         std::fs::create_dir_all(&config.cache_dir)?;
@@ -46,7 +46,7 @@ impl PackageManager {
         })
     }
 
-    /// Open an existing Astra system.
+    /// opens an existing astra system.
     pub fn open(config: AstraConfig) -> Result<Self, AstraError> {
         if !config.data_dir.exists() {
             return Err(AstraError::NotInitialized);
@@ -68,34 +68,34 @@ impl PackageManager {
         })
     }
 
-    /// Get a reference to the config.
+    /// returns a reference to the config.
     pub fn config(&self) -> &AstraConfig {
         &self.config
     }
 
-    /// Get a mutable reference to the config.
+    /// returns a mutable reference to the config.
     pub fn config_mut(&mut self) -> &mut AstraConfig {
         &mut self.config
     }
 
-    /// Get a reference to the database.
+    /// returns a reference to the database.
     pub fn db(&self) -> &Database {
         &self.db
     }
 
-    /// Get a reference to the keyring.
+    /// returns a reference to the keyring.
     pub fn keyring(&self) -> &KeyRing {
         &self.keyring
     }
 
-    // ─── Repository Management ─────────────────────────────────────
+    // ─── repository management ─────────────────────────────────────
 
-    /// Add a new repository.
+    /// adds a new repository.
     pub fn add_repo(&mut self, name: &str, url_str: &str) -> Result<(), AstraError> {
-        let url = Url::parse(url_str)
-            .map_err(|e| AstraError::Other(format!("invalid URL: {e}")))?;
+        let url =
+            Url::parse(url_str).map_err(|e| AstraError::Other(format!("invalid URL: {e}")))?;
 
-        // Check for duplicates
+        // check for duplicates
         if self.config.repositories.iter().any(|r| r.name == name) {
             return Err(AstraError::Other(format!(
                 "repository '{name}' already exists"
@@ -112,21 +112,19 @@ impl PackageManager {
         Ok(())
     }
 
-    /// Remove a repository.
+    /// removes a repository.
     pub fn remove_repo(&mut self, name: &str) -> Result<(), AstraError> {
         let before = self.config.repositories.len();
         self.config.repositories.retain(|r| r.name != name);
         if self.config.repositories.len() == before {
-            return Err(AstraError::Other(format!(
-                "repository '{name}' not found"
-            )));
+            return Err(AstraError::Other(format!("repository '{name}' not found")));
         }
         self.indices.remove(name);
         self.config.save(&self.config.config_path())?;
         Ok(())
     }
 
-    /// Update (fetch) all repository indices.
+    /// fetches all repo indices from remote.
     pub async fn update(&mut self) -> Result<Vec<String>, AstraError> {
         let mut updated = Vec::new();
         let repos: Vec<RepoConfig> = self.config.repositories.clone();
@@ -136,7 +134,7 @@ impl PackageManager {
             }
             match self.repo_client.fetch_index(repo).await {
                 Ok(index) => {
-                    // Cache the index to disk
+                    // cache the index to disk
                     let cache_dir = self.config.repo_cache_dir(&repo.name);
                     std::fs::create_dir_all(&cache_dir)?;
                     let index_path = cache_dir.join("index.json");
@@ -155,7 +153,7 @@ impl PackageManager {
         Ok(updated)
     }
 
-    /// Load cached indices from disk.
+    /// loads cached indices from disk.
     pub fn load_cached_indices(&mut self) -> Result<(), AstraError> {
         for repo in &self.config.repositories {
             let cache_dir = self.config.repo_cache_dir(&repo.name);
@@ -170,9 +168,9 @@ impl PackageManager {
         Ok(())
     }
 
-    // ─── Package Queries ───────────────────────────────────────────
+    // ─── package queries ───────────────────────────────────────────
 
-    /// Search for packages across all repositories.
+    /// searches for packages across all repos.
     pub fn search(&self, query: &str) -> Vec<(&str, &RepoPackageEntry)> {
         let mut results = Vec::new();
         for (repo_name, index) in &self.indices {
@@ -183,7 +181,7 @@ impl PackageManager {
         results
     }
 
-    /// Get info about a package from repositories.
+    /// gets info about a package from repos.
     pub fn info(&self, name: &str) -> Option<(&str, &RepoPackageEntry)> {
         for (repo_name, index) in &self.indices {
             if let Some(entry) = index.find_package(name) {
@@ -193,20 +191,20 @@ impl PackageManager {
         None
     }
 
-    // ─── Installation ──────────────────────────────────────────────
+    // ─── installation ──────────────────────────────────────────────
 
-    /// Install packages by name.
+    /// installs packages by name from remote repos.
     pub async fn install(&mut self, names: &[String]) -> Result<Vec<String>, AstraError> {
         self.load_cached_indices()?;
 
-        // Build resolver
+        // build resolver
         let mut resolver = Resolver::new();
-        // Add installed packages
+        // add installed packages
         for pkg in self.db.list_packages()? {
             resolver.add_installed(pkg.name.clone(), pkg.version.clone());
         }
-        // Add available packages from indices
-        for (_, index) in &self.indices {
+        // add available packages from indices
+        for index in self.indices.values() {
             for entry in &index.packages {
                 resolver.add_candidate(PackageCandidate {
                     name: entry.name.clone(),
@@ -219,7 +217,7 @@ impl PackageManager {
             }
         }
 
-        // Resolve
+        // resolve
         let resolution = resolver.resolve(names)?;
         tracing::info!(
             "Resolved {} packages to install: {:?}",
@@ -229,10 +227,10 @@ impl PackageManager {
 
         let mut installed = Vec::new();
         for pkg_name in &resolution.install_order {
-            // Find which repo has this package
+            // find which repo has this package
             let (repo_config, entry) = self.find_package_in_repos(pkg_name)?;
 
-            // Download
+            // download
             let cache_dir = self.config.package_cache_dir();
             std::fs::create_dir_all(&cache_dir)?;
             let pkg_path = cache_dir.join(&entry.filename);
@@ -241,12 +239,12 @@ impl PackageManager {
                 .download_package(&repo_config, &entry.filename, &entry.checksum, &pkg_path)
                 .await?;
 
-            // Read & verify
+            // read & verify
             let package = PackageReader::read_from_file(&pkg_path)?;
 
-            // Verify signature against any key in keyring
+            // verify signature against any key in keyring
             let mut verified = false;
-            for (_, key) in self.keyring.all_keys() {
+            for key in self.keyring.all_keys().values() {
                 if package.verify(key).is_ok() {
                     verified = true;
                     break;
@@ -258,10 +256,10 @@ impl PackageManager {
                 )));
             }
 
-            // Install files
+            // install files
             let file_paths = self.extract_files(&package)?;
 
-            // Record in database
+            // record in database
             let reason = if names.contains(pkg_name) {
                 InstallReason::Explicit
             } else {
@@ -276,17 +274,13 @@ impl PackageManager {
         Ok(installed)
     }
 
-    /// Install a local package file.
-    pub fn install_local(
-        &mut self,
-        path: &Path,
-        skip_verify: bool,
-    ) -> Result<String, AstraError> {
+    /// installs a local .astpkg file.
+    pub fn install_local(&mut self, path: &Path, skip_verify: bool) -> Result<String, AstraError> {
         let package = PackageReader::read_from_file(path)?;
 
         if !skip_verify {
             let mut verified = false;
-            for (_, key) in self.keyring.all_keys() {
+            for key in self.keyring.all_keys().values() {
                 if package.verify(key).is_ok() {
                     verified = true;
                     break;
@@ -307,7 +301,7 @@ impl PackageManager {
         Ok(package.metadata.name.clone())
     }
 
-    /// Extract package files to the root filesystem.
+    /// extracts package files to the root filesystem.
     fn extract_files(&self, package: &Package) -> Result<Vec<PathBuf>, AstraError> {
         let mut paths = Vec::new();
         for (rel_path, content) in &package.files {
@@ -321,15 +315,17 @@ impl PackageManager {
         Ok(paths)
     }
 
-    // ─── Removal ───────────────────────────────────────────────────
+    // ─── removal ───────────────────────────────────────────────────
 
-    /// Remove a package.
+    /// removes a package and its files.
     pub fn remove(&mut self, name: &str) -> Result<Vec<PathBuf>, AstraError> {
         if !self.db.is_installed(name)? {
-            return Err(AstraError::Other(format!("package '{name}' is not installed")));
+            return Err(AstraError::Other(format!(
+                "package '{name}' is not installed"
+            )));
         }
 
-        // Check reverse dependencies
+        // check reverse dependencies
         let rdeps = self.db.get_reverse_dependencies(name)?;
         if !rdeps.is_empty() {
             return Err(AstraError::Other(format!(
@@ -340,7 +336,7 @@ impl PackageManager {
 
         let files = self.db.remove_package(name)?;
 
-        // Remove files from filesystem
+        // remove files from filesystem
         for file_path in &files {
             let full_path = self.config.root.join(file_path);
             if full_path.exists() {
@@ -348,7 +344,7 @@ impl PackageManager {
             }
         }
 
-        // Clean up empty directories
+        // clean up empty directories
         for file_path in &files {
             let full_path = self.config.root.join(file_path);
             if let Some(parent) = full_path.parent() {
@@ -362,7 +358,11 @@ impl PackageManager {
     fn remove_empty_dirs(dir: &Path, root: &Path) {
         let mut current = dir.to_path_buf();
         while current != *root {
-            if current.exists() && std::fs::read_dir(&current).map(|mut d| d.next().is_none()).unwrap_or(false) {
+            if current.exists()
+                && std::fs::read_dir(&current)
+                    .map(|mut d| d.next().is_none())
+                    .unwrap_or(false)
+            {
                 std::fs::remove_dir(&current).ok();
             } else {
                 break;
@@ -374,15 +374,15 @@ impl PackageManager {
         }
     }
 
-    // ─── Upgrade ───────────────────────────────────────────────────
+    // ─── upgrade ───────────────────────────────────────────────────
 
-    /// Check for available upgrades.
+    /// checks what packages have newer versions available.
     pub fn check_upgrades(&self) -> Result<Vec<(String, Version, Version)>, AstraError> {
         let mut upgrades = Vec::new();
         let installed = self.db.list_packages()?;
 
         for pkg in &installed {
-            for (_, index) in &self.indices {
+            for index in self.indices.values() {
                 if let Some(entry) = index.find_package(&pkg.name) {
                     if entry.version > pkg.version {
                         upgrades.push((
@@ -398,7 +398,7 @@ impl PackageManager {
         Ok(upgrades)
     }
 
-    /// Upgrade all packages.
+    /// upgrades all packages that have newer versions.
     pub async fn upgrade(&mut self) -> Result<Vec<String>, AstraError> {
         self.load_cached_indices()?;
         let upgrades = self.check_upgrades()?;
@@ -409,9 +409,9 @@ impl PackageManager {
         self.install(&names).await
     }
 
-    // ─── Verification ──────────────────────────────────────────────
+    // ─── verification ──────────────────────────────────────────────
 
-    /// Verify an installed package's integrity.
+    /// verifies an installed package's file integrity.
     pub fn verify_installed(&self, name: &str) -> Result<Vec<String>, AstraError> {
         let pkg = self.db.get_package(name)?;
         let metadata = self.db.get_metadata(name)?;
@@ -424,7 +424,7 @@ impl PackageManager {
                 continue;
             }
 
-            // Check checksum if available
+            // check checksum if available
             let key = file_path.to_string_lossy().to_string();
             if let Some(checksum) = metadata.checksums.get(&key) {
                 let content = std::fs::read(&full_path)?;
@@ -438,16 +438,20 @@ impl PackageManager {
         Ok(issues)
     }
 
-    // ─── Key Management ────────────────────────────────────────────
+    // ─── key management ────────────────────────────────────────────
 
-    /// Import a public key into the keyring.
-    pub fn import_key(&mut self, name: &str, key: astra_crypto::PublicKey) -> Result<(), AstraError> {
+    /// imports a public key into the keyring.
+    pub fn import_key(
+        &mut self,
+        name: &str,
+        key: astra_crypto::PublicKey,
+    ) -> Result<(), AstraError> {
         self.keyring.add(name.to_string(), key);
         self.keyring.save_to_file(&self.config.keyring_path())?;
         Ok(())
     }
 
-    /// Export the signing key's public key.
+    /// exports the signing key's public key.
     pub fn export_public_key(&self) -> Result<astra_crypto::PublicKey, AstraError> {
         let key_path = self.config.signing_key_path();
         if !key_path.exists() {
@@ -457,14 +461,14 @@ impl PackageManager {
         Ok(keypair.public_key())
     }
 
-    /// Generate a new signing key pair.
+    /// generates a new signing keypair.
     pub fn generate_keypair(&self) -> Result<KeyPair, AstraError> {
         let keypair = KeyPair::generate();
         keypair.save_to_file(&self.config.signing_key_path())?;
         Ok(keypair)
     }
 
-    /// Load the signing key pair.
+    /// loads the signing keypair from disk.
     pub fn load_keypair(&self) -> Result<KeyPair, AstraError> {
         let key_path = self.config.signing_key_path();
         if !key_path.exists() {
@@ -475,15 +479,15 @@ impl PackageManager {
         Ok(KeyPair::load_from_file(&key_path)?)
     }
 
-    // ─── Building ──────────────────────────────────────────────────
+    // ─── building ──────────────────────────────────────────────────
 
-    /// Build a package from a directory.
+    /// builds a package from a directory.
     pub fn build(&self, pkg_dir: &Path, output_dir: &Path) -> Result<PathBuf, AstraError> {
         let keypair = self.load_keypair()?;
         Ok(Builder::build(pkg_dir, &keypair, output_dir)?)
     }
 
-    // ─── Helpers ───────────────────────────────────────────────────
+    // ─── helpers ───────────────────────────────────────────────────
 
     fn find_package_in_repos(
         &self,
@@ -501,7 +505,7 @@ impl PackageManager {
         ))
     }
 
-    /// Save current config.
+    /// saves the current config to disk.
     pub fn save_config(&self) -> Result<(), AstraError> {
         self.config.save(&self.config.config_path())?;
         Ok(())
