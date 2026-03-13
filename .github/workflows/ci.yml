@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install OpenSSL
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install OpenSSL dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
-      - name: Set OPENSSL_DIR
-        run: echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets
 
@@ -31,8 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           components: rustfmt
       - run: cargo fmt --all -- --check
 
@@ -41,15 +42,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           components: clippy
-      - name: Install OpenSSL
+      - name: Install OpenSSL dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
-      - name: Set OPENSSL_DIR
-        run: echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -58,13 +58,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install OpenSSL
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install OpenSSL dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
-      - name: Set OPENSSL_DIR
-        run: echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
@@ -82,15 +82,14 @@ jobs:
             artifact: astra-linux-arm64
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
-      - name: Install OpenSSL
+      - name: Install OpenSSL dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
-      - name: Set OPENSSL_DIR
-        run: echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
 
       - name: Install cross-compilation tools
