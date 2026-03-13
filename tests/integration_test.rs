@@ -4,7 +4,7 @@
 
 use astra_builder::Builder;
 use astra_core::{AstraConfig, PackageManager};
-use astra_crypto::{sha256_hex, KeyPair};
+use astra_crypto::KeyPair;
 use astra_db::{Database, InstallReason};
 use astra_pkg::{Metadata, Package, PackageReader, PackageWriter};
 use astra_repo::{RepoIndex, RepoPackageEntry};
