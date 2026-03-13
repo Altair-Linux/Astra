@@ -58,9 +58,42 @@ impl Package {
     /// builds the signable content: a hash of metadata + file contents + scripts.
     pub fn signable_content(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
-        // hash the metadata json (deterministic with sorted keys)
-        let meta_json = serde_json::to_string(&self.metadata).unwrap();
-        hasher.update(meta_json.as_bytes());
+
+        // hash metadata fields directly so signatures don't depend on map iteration order.
+        hasher.update(self.metadata.name.as_bytes());
+        hasher.update(self.metadata.version.to_string().as_bytes());
+        hasher.update(self.metadata.architecture.as_bytes());
+        hasher.update(self.metadata.description.as_bytes());
+        hasher.update(self.metadata.maintainer.as_bytes());
+        hasher.update(self.metadata.license.as_bytes());
+        hasher.update(self.metadata.build_date.to_rfc3339().as_bytes());
+
+        for dep in &self.metadata.dependencies {
+            hasher.update(dep.name.as_bytes());
+            hasher.update(dep.version_req.as_deref().unwrap_or("*").as_bytes());
+        }
+        for dep in &self.metadata.optional_dependencies {
+            hasher.update(dep.name.as_bytes());
+            hasher.update(dep.version_req.as_deref().unwrap_or("*").as_bytes());
+        }
+        for c in &self.metadata.conflicts {
+            hasher.update(c.as_bytes());
+        }
+        for p in &self.metadata.provides {
+            hasher.update(p.as_bytes());
+        }
+
+        // checksums are stored in a HashMap, so sort keys before hashing.
+        let mut checksum_keys: Vec<_> = self.metadata.checksums.keys().collect();
+        checksum_keys.sort();
+        for key in checksum_keys {
+            let c = &self.metadata.checksums[key];
+            hasher.update(key.as_bytes());
+            hasher.update(c.sha256.as_bytes());
+            hasher.update(c.size.to_le_bytes());
+        }
+        hasher.update(self.metadata.installed_size.to_le_bytes());
+
         // hash all file contents in sorted order for consistency
         let mut paths: Vec<_> = self.files.keys().collect();
         paths.sort();
