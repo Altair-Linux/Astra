@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
+const DETERMINISTIC_MTIME: u64 = 0;
+
 /// in-memory representation of an astra package.
 #[derive(Debug, Clone)]
 pub struct Package {
@@ -153,6 +155,9 @@ impl PackageWriter {
         header.set_path("metadata.json")?;
         header.set_size(meta_bytes.len() as u64);
         header.set_mode(0o644);
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(DETERMINISTIC_MTIME);
         header.set_cksum();
         archive.append(&header, &meta_bytes[..])?;
 
@@ -168,6 +173,9 @@ impl PackageWriter {
             header.set_path(&archive_path_str)?;
             header.set_size(content.len() as u64);
             header.set_mode(0o644);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mtime(DETERMINISTIC_MTIME);
             header.set_cksum();
             archive.append(&header, &content[..])?;
         }
@@ -182,6 +190,9 @@ impl PackageWriter {
             header.set_path(&archive_path)?;
             header.set_size(content.len() as u64);
             header.set_mode(0o755);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mtime(DETERMINISTIC_MTIME);
             header.set_cksum();
             archive.append(&header, content.as_bytes())?;
         }
@@ -192,6 +203,9 @@ impl PackageWriter {
             header.set_path("signature")?;
             header.set_size(sig.len() as u64);
             header.set_mode(0o644);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mtime(DETERMINISTIC_MTIME);
             header.set_cksum();
             archive.append(&header, &sig[..])?;
         }
@@ -300,6 +314,7 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use semver::Version;
+    use std::collections::HashMap;
 
     fn sample_metadata() -> Metadata {
         Metadata {
