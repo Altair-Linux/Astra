@@ -1,6 +1,9 @@
 use astra_pkg::Dependency;
+use astra_pkg::PackageReader;
+use chrono::Utc;
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use url::Url;
 
 /// config for a repository source.
@@ -90,4 +93,68 @@ pub struct RepoPackageEntry {
     /// maintainer.
     #[serde(default)]
     pub maintainer: String,
+}
+
+/// scans a repository directory and builds index metadata.
+pub fn generate_repo_index(
+    repo_root: &Path,
+    name: Option<&str>,
+    description: Option<&str>,
+) -> Result<RepoIndex, crate::RepoError> {
+    let packages_dir = repo_root.join("packages");
+    std::fs::create_dir_all(&packages_dir)?;
+
+    let mut packages = Vec::new();
+
+    for entry in std::fs::read_dir(&packages_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() || path.extension().map(|ext| ext != "astpkg").unwrap_or(true) {
+            continue;
+        }
+
+        let metadata = PackageReader::read_metadata(&path)?;
+        let checksum = PackageReader::file_checksum(&path)?;
+        let size = std::fs::metadata(&path)?.len();
+        let filename = path
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        packages.push(RepoPackageEntry {
+            name: metadata.name,
+            version: metadata.version,
+            architecture: metadata.architecture,
+            description: metadata.description,
+            dependencies: metadata.dependencies,
+            conflicts: metadata.conflicts,
+            provides: metadata.provides,
+            checksum,
+            filename,
+            size,
+            license: metadata.license,
+            maintainer: metadata.maintainer,
+        });
+    }
+
+    packages.sort_by(|a, b| {
+        a.name
+            .cmp(&b.name)
+            .then_with(|| b.version.cmp(&a.version))
+            .then_with(|| a.architecture.cmp(&b.architecture))
+    });
+
+    let default_name = repo_root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "altair-repo".to_string());
+
+    Ok(RepoIndex {
+        name: name.unwrap_or(&default_name).to_string(),
+        description: description
+            .unwrap_or("Altair Linux package repository")
+            .to_string(),
+        last_updated: Utc::now().to_rfc3339(),
+        packages,
+    })
 }

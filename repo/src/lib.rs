@@ -9,4 +9,4 @@ mod index;
 
 pub use client::RepoClient;
 pub use error::RepoError;
-pub use index::{RepoConfig, RepoIndex, RepoPackageEntry};
+pub use index::{generate_repo_index, RepoConfig, RepoIndex, RepoPackageEntry};

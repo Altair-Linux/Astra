@@ -80,6 +80,38 @@ impl AstraConfig {
     pub fn package_cache_dir(&self) -> PathBuf {
         self.cache_dir.join("packages")
     }
+
+    /// where trusted repository keys are stored.
+    pub fn trusted_keys_dir(&self) -> PathBuf {
+        if self.root == PathBuf::from("/") {
+            PathBuf::from("/etc/astra/keys")
+        } else {
+            self.root.join("etc/astra/keys")
+        }
+    }
+
+    /// repository configuration file.
+    pub fn repos_conf_path(&self) -> PathBuf {
+        if self.root == PathBuf::from("/") {
+            PathBuf::from("/etc/astra/repos.conf")
+        } else {
+            self.root.join("etc/astra/repos.conf")
+        }
+    }
+
+    /// transactions journal directory.
+    pub fn transactions_dir(&self) -> PathBuf {
+        self.data_dir.join("transactions")
+    }
+
+    /// operation log file.
+    pub fn log_path(&self) -> PathBuf {
+        if self.root == PathBuf::from("/") {
+            PathBuf::from("/var/log/astra.log")
+        } else {
+            self.root.join("var/log/astra.log")
+        }
+    }
 }
 
 impl Default for AstraConfig {

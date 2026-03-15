@@ -31,6 +31,9 @@ pub enum RepoError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("package error: {0}")]
+    Package(#[from] astra_pkg::PackageError),
+
     #[error("crypto error: {0}")]
     Crypto(#[from] astra_crypto::CryptoError),
 }

@@ -363,7 +363,7 @@ mod tests {
     use astra_pkg::{Dependency, Metadata};
     use chrono::Utc;
     use semver::Version;
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     fn test_metadata(name: &str) -> Metadata {
         Metadata {
@@ -378,7 +378,7 @@ mod tests {
             maintainer: "Test <test@test.com>".into(),
             license: "ZPL-2.0".into(),
             build_date: Utc::now(),
-            checksums: HashMap::new(),
+            checksums: BTreeMap::new(),
             installed_size: 1024,
         }
     }

@@ -37,6 +37,12 @@ pub struct Recipe {
     /// source directory containing files to package (relative to Astrafile.yaml).
     #[serde(default = "default_files_dir")]
     pub files_dir: String,
+    /// optional source URL to fetch during build.
+    #[serde(default)]
+    pub source_url: Option<String>,
+    /// expected sha256 for downloaded source artifact.
+    #[serde(default)]
+    pub source_sha256: Option<String>,
 }
 
 fn default_arch() -> String {
@@ -73,9 +79,104 @@ impl Recipe {
     /// loads a recipe from a yaml file.
     pub fn load(path: &Path) -> Result<Self, crate::BuildError> {
         let content = std::fs::read_to_string(path)?;
-        let recipe: Self = serde_yaml::from_str(&content)?;
+        let recipe: Self = if path
+            .file_name()
+            .map(|n| n == "astra.pkg")
+            .unwrap_or(false)
+        {
+            Self::parse_astra_pkg(&content)?
+        } else {
+            serde_yaml::from_str(&content)?
+        };
         recipe.validate()?;
         Ok(recipe)
+    }
+
+    fn parse_astra_pkg(content: &str) -> Result<Self, crate::BuildError> {
+        let mut map: HashMap<String, String> = HashMap::new();
+
+        for raw in content.lines() {
+            let line = raw.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            map.insert(
+                key.trim().to_string(),
+                value.trim().trim_matches('"').to_string(),
+            );
+        }
+
+        let dependencies = map
+            .get("dependencies")
+            .map(|deps| {
+                deps.split(',')
+                    .filter_map(|entry| {
+                        let part = entry.trim();
+                        if part.is_empty() {
+                            return None;
+                        }
+                        if let Some((name, req)) = part.split_once(':') {
+                            return Some(RecipeDependency {
+                                name: name.trim().to_string(),
+                                version: Some(req.trim().to_string()),
+                            });
+                        }
+                        Some(RecipeDependency {
+                            name: part.to_string(),
+                            version: None,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let provides = map
+            .get("provides")
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|x| x.trim().to_string())
+                    .filter(|x| !x.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let conflicts = map
+            .get("conflicts")
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|x| x.trim().to_string())
+                    .filter(|x| !x.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        Ok(Self {
+            name: map.get("name").cloned().unwrap_or_default(),
+            version: map.get("version").cloned().unwrap_or_default(),
+            architecture: map
+                .get("architecture")
+                .cloned()
+                .unwrap_or_else(default_arch),
+            description: map.get("description").cloned().unwrap_or_default(),
+            maintainer: map.get("maintainer").cloned().unwrap_or_default(),
+            license: map.get("license").cloned().unwrap_or_default(),
+            dependencies,
+            optional_dependencies: Vec::new(),
+            conflicts,
+            provides,
+            scripts: HashMap::new(),
+            files_dir: map
+                .get("files_dir")
+                .cloned()
+                .unwrap_or_else(default_files_dir),
+            source_url: map.get("source_url").cloned(),
+            source_sha256: map.get("source_sha256").cloned(),
+        })
     }
 
     /// validates the recipe fields.
@@ -101,6 +202,11 @@ impl Recipe {
         if self.license.is_empty() {
             return Err(crate::BuildError::InvalidRecipe(
                 "license is required".into(),
+            ));
+        }
+        if self.source_url.is_some() && self.source_sha256.is_none() {
+            return Err(crate::BuildError::InvalidRecipe(
+                "source_sha256 is required when source_url is provided".into(),
             ));
         }
         // validate version is valid semver

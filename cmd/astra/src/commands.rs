@@ -2,8 +2,10 @@ use crate::Cli;
 use anyhow::Result;
 use astra_core::{AstraConfig, PackageManager};
 use astra_crypto::PublicKey;
+use astra_repo::generate_repo_index;
 use colored::Colorize;
 use std::path::Path;
+use url::Url;
 
 fn make_config(cli: &Cli) -> AstraConfig {
     AstraConfig {
@@ -16,12 +18,51 @@ fn make_config(cli: &Cli) -> AstraConfig {
 
 fn open_manager(cli: &Cli) -> Result<PackageManager> {
     let config_path = cli.data_dir.join("config.json");
-    let config = if config_path.exists() {
+    let mut config = if config_path.exists() {
         AstraConfig::load(&config_path)?
     } else {
         make_config(cli)
     };
+
+    if config.repositories.is_empty() {
+        let repos_conf = config.repos_conf_path();
+        if repos_conf.exists() {
+            config.repositories = parse_repos_conf(&repos_conf)?;
+        }
+    }
+
     Ok(PackageManager::open(config)?)
+}
+
+fn parse_repos_conf(path: &Path) -> Result<Vec<astra_repo::RepoConfig>> {
+    let content = std::fs::read_to_string(path)?;
+    let mut repos = Vec::new();
+    let mut current_name: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
+            continue;
+        }
+
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current_name = Some(trimmed[1..trimmed.len() - 1].to_string());
+            continue;
+        }
+
+        if let Some(rest) = trimmed.strip_prefix("url=") {
+            if let Some(name) = current_name.clone() {
+                let url = Url::parse(rest.trim())?;
+                repos.push(astra_repo::RepoConfig {
+                    name,
+                    url,
+                    enabled: true,
+                });
+            }
+        }
+    }
+
+    Ok(repos)
 }
 
 // ─── init ──────────────────────────────────────────────────────────
@@ -91,6 +132,35 @@ pub async fn repo_list(cli: &Cli) -> Result<()> {
             println!("  {} {} [{}]", repo.name.cyan(), repo.url, status);
         }
     }
+    Ok(())
+}
+
+pub async fn repo_update(cli: &Cli, directory: &Path) -> Result<()> {
+    let repo_root = directory.canonicalize().unwrap_or_else(|_| directory.to_path_buf());
+    let index = generate_repo_index(&repo_root, None, None)?;
+
+    let index_path = repo_root.join("index.json");
+    let json = serde_json::to_string_pretty(&index)?;
+    std::fs::write(&index_path, json)?;
+
+    if cli.json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "status": "updated",
+                "index": index_path.display().to_string(),
+                "packages": index.packages.len(),
+            })
+        );
+    } else {
+        println!(
+            "{} Repository index updated: {} ({} packages)",
+            "✓".green().bold(),
+            index_path.display(),
+            index.packages.len()
+        );
+    }
+
     Ok(())
 }
 
@@ -412,9 +482,9 @@ pub async fn verify(cli: &Cli, name: &str) -> Result<()> {
 
 // ─── build ─────────────────────────────────────────────────────────
 
-pub async fn build(cli: &Cli, directory: &Path, output: &Path) -> Result<()> {
+pub async fn build(cli: &Cli, directory: &Path, output: &Path, sandbox: bool) -> Result<()> {
     let mgr = open_manager(cli)?;
-    let pkg_path = mgr.build(directory, output)?;
+    let pkg_path = mgr.build(directory, output, sandbox)?;
     if cli.json {
         println!(r#"{{"status":"built","path":"{}"}}"#, pkg_path.display());
     } else {
@@ -520,6 +590,17 @@ pub async fn key_list(cli: &Cli) -> Result<()> {
         for (name, key) in keys {
             println!("  {} {}", name.cyan(), key.to_base64().dimmed());
         }
+    }
+    Ok(())
+}
+
+pub async fn key_remove(cli: &Cli, name: &str) -> Result<()> {
+    let mut mgr = open_manager(cli)?;
+    mgr.remove_key(name)?;
+    if cli.json {
+        println!(r#"{{"status":"removed","name":"{name}"}}"#);
+    } else {
+        println!("{} Removed trusted key '{}'", "✓".green().bold(), name);
     }
     Ok(())
 }

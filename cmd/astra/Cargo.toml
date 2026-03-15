@@ -31,3 +31,5 @@ colored.workspace = true
 indicatif.workspace = true
 dialoguer.workspace = true
 semver.workspace = true
+chrono.workspace = true
+url.workspace = true

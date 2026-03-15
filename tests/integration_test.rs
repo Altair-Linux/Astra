@@ -7,11 +7,11 @@ use astra_core::{AstraConfig, PackageManager};
 use astra_crypto::KeyPair;
 use astra_db::{Database, InstallReason};
 use astra_pkg::{Metadata, Package, PackageReader, PackageWriter};
-use astra_repo::{RepoIndex, RepoPackageEntry};
+use astra_repo::{generate_repo_index, RepoIndex, RepoPackageEntry};
 use astra_resolver::{PackageCandidate, Resolver};
 use chrono::Utc;
 use semver::Version;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -33,7 +33,7 @@ fn test_package_create_read_verify() {
         maintainer: "Test <test@test.com>".into(),
         license: "ZPL-2.0".into(),
         build_date: Utc::now(),
-        checksums: HashMap::new(),
+        checksums: BTreeMap::new(),
         installed_size: 0,
     };
 
@@ -77,7 +77,7 @@ fn test_package_write_to_file() {
         maintainer: "Test <test@test.com>".into(),
         license: "ZPL-2.0".into(),
         build_date: Utc::now(),
-        checksums: HashMap::new(),
+        checksums: BTreeMap::new(),
         installed_size: 0,
     };
 
@@ -122,7 +122,7 @@ fn test_database_full_lifecycle() {
         maintainer: "Test <test@test.com>".into(),
         license: "ZPL-2.0".into(),
         build_date: Utc::now(),
-        checksums: HashMap::new(),
+        checksums: BTreeMap::new(),
         installed_size: 2048,
     };
 
@@ -261,7 +261,7 @@ files_dir: files
     .unwrap();
 
     let output_dir = tmp.path().join("output");
-    let pkg_path = Builder::build(&pkg_dir, &keypair, &output_dir).unwrap();
+    let pkg_path = Builder::build(&pkg_dir, &keypair, &output_dir, false).unwrap();
 
     assert!(pkg_path.exists());
     assert!(pkg_path
@@ -445,7 +445,7 @@ license: ZPL-2.0
     .unwrap();
 
     let output_dir = tmp.path().join("packages");
-    let pkg_path = mgr.build(&pkg_dir, &output_dir).unwrap();
+    let pkg_path = mgr.build(&pkg_dir, &output_dir, false).unwrap();
     assert!(pkg_path.exists());
 
     // install locally
@@ -471,4 +471,120 @@ license: ZPL-2.0
     let files = mgr.remove("hello").unwrap();
     assert!(!files.is_empty());
     assert!(!mgr.db().is_installed("hello").unwrap());
+}
+
+#[test]
+fn test_deterministic_build_output() {
+    let tmp = TempDir::new().unwrap();
+    let keypair = KeyPair::generate();
+
+    let pkg_dir = tmp.path().join("deterministic");
+    std::fs::create_dir_all(pkg_dir.join("files/usr/bin")).unwrap();
+    std::fs::write(pkg_dir.join("files/usr/bin/app"), "#!/bin/sh\necho app\n").unwrap();
+    std::fs::write(
+        pkg_dir.join("Astrafile.yaml"),
+        r#"
+name: deterministic
+version: "1.0.0"
+architecture: x86_64
+description: "Determinism test"
+maintainer: "Test <test@test.com>"
+license: ZPL-2.0
+"#,
+    )
+    .unwrap();
+
+    std::env::set_var("SOURCE_DATE_EPOCH", "1700000000");
+    let out1 = tmp.path().join("out1");
+    let out2 = tmp.path().join("out2");
+    let pkg1 = Builder::build(&pkg_dir, &keypair, &out1, false).unwrap();
+    let pkg2 = Builder::build(&pkg_dir, &keypair, &out2, false).unwrap();
+    std::env::remove_var("SOURCE_DATE_EPOCH");
+
+    let b1 = std::fs::read(pkg1).unwrap();
+    let b2 = std::fs::read(pkg2).unwrap();
+    assert_eq!(b1, b2);
+}
+
+#[test]
+fn test_repo_index_generation_from_packages_dir() {
+    let tmp = TempDir::new().unwrap();
+    let repo_root = tmp.path().join("repo");
+    let packages_dir = repo_root.join("packages");
+    std::fs::create_dir_all(&packages_dir).unwrap();
+
+    let keypair = KeyPair::generate();
+    let mut pkg = Package::new(Metadata {
+        name: "nano".into(),
+        version: Version::new(7, 2, 0),
+        architecture: "x86_64".into(),
+        description: "Nano editor".into(),
+        dependencies: vec![],
+        optional_dependencies: vec![],
+        conflicts: vec![],
+        provides: vec![],
+        maintainer: "Altair <contact@altairlinux.org>".into(),
+        license: "ZPL-2.0".into(),
+        build_date: Utc::now(),
+        checksums: BTreeMap::new(),
+        installed_size: 0,
+    });
+    pkg.add_file("usr/bin/nano", b"binary".to_vec());
+    pkg.sign(&keypair);
+
+    let pkg_path = packages_dir.join("nano-7.2.0-x86_64.astpkg");
+    PackageWriter::write_to_file(&pkg, &pkg_path).unwrap();
+
+    let index = generate_repo_index(&repo_root, Some("core"), Some("Core repo")).unwrap();
+    assert_eq!(index.name, "core");
+    assert_eq!(index.packages.len(), 1);
+    assert_eq!(index.packages[0].name, "nano");
+    assert_eq!(index.packages[0].filename, "nano-7.2.0-x86_64.astpkg");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_transaction_rollback_on_script_failure() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("root");
+    let data = tmp.path().join("data");
+    std::fs::create_dir_all(&root).unwrap();
+
+    let config = AstraConfig {
+        root: root.clone(),
+        data_dir: data.clone(),
+        cache_dir: data.join("cache"),
+        repositories: vec![],
+    };
+    let mut mgr = PackageManager::init(config).unwrap();
+
+    let keypair = mgr.generate_keypair().unwrap();
+    mgr.import_key("local", keypair.public_key()).unwrap();
+
+    let mut pkg = Package::new(Metadata {
+        name: "rollback-test".into(),
+        version: Version::new(1, 0, 0),
+        architecture: "x86_64".into(),
+        description: "Rollback test".into(),
+        dependencies: vec![],
+        optional_dependencies: vec![],
+        conflicts: vec![],
+        provides: vec![],
+        maintainer: "Test <test@test.com>".into(),
+        license: "ZPL-2.0".into(),
+        build_date: Utc::now(),
+        checksums: BTreeMap::new(),
+        installed_size: 0,
+    });
+    pkg.add_file("usr/bin/rollback-test", b"echo test\n".to_vec());
+    pkg.add_script(astra_pkg::ScriptType::PostInstall, "exit 1".to_string());
+    pkg.sign(&keypair);
+
+    let pkg_path = tmp.path().join("rollback-test-1.0.0-x86_64.astpkg");
+    PackageWriter::write_to_file(&pkg, &pkg_path).unwrap();
+
+    let result = mgr.install_local(&pkg_path, false);
+    assert!(result.is_err());
+    assert!(!root.join("usr/bin/rollback-test").exists());
+    assert!(!mgr.db().is_installed("rollback-test").unwrap());
 }

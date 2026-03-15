@@ -1,11 +1,17 @@
 use crate::{AstraConfig, AstraError};
 use astra_builder::Builder;
-use astra_crypto::{KeyPair, KeyRing};
+use astra_crypto::{sha256_hex, KeyPair, KeyRing};
 use astra_db::{Database, InstallReason};
-use astra_pkg::{Package, PackageReader};
+use astra_pkg::{Package, PackageReader, ScriptType};
 use astra_repo::{RepoClient, RepoConfig, RepoIndex, RepoPackageEntry};
 use astra_resolver::{PackageCandidate, Resolver};
+use serde::{Deserialize, Serialize};
 use semver::Version;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::Component;
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
@@ -20,11 +26,29 @@ pub struct PackageManager {
     indices: HashMap<String, RepoIndex>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum TxOperation {
+    Install,
+    Remove,
+    Upgrade,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TxJournal {
+    id: String,
+    operation: TxOperation,
+    package: String,
+    created_files: Vec<PathBuf>,
+    removed_files: Vec<PathBuf>,
+}
+
 impl PackageManager {
     /// sets up a fresh astra system at the given root.
     pub fn init(config: AstraConfig) -> Result<Self, AstraError> {
         std::fs::create_dir_all(&config.data_dir)?;
         std::fs::create_dir_all(&config.cache_dir)?;
+        std::fs::create_dir_all(config.transactions_dir())?;
+        std::fs::create_dir_all(config.trusted_keys_dir())?;
 
         let db = Database::open(&config.db_path())?;
         let keyring = if config.keyring_path().exists() {
@@ -37,13 +61,16 @@ impl PackageManager {
 
         config.save(&config.config_path())?;
 
-        Ok(Self {
+        let manager = Self {
             config,
             db,
             keyring,
             repo_client: RepoClient::new(),
             indices: HashMap::new(),
-        })
+        };
+
+        manager.recover_transactions()?;
+        Ok(manager)
     }
 
     /// opens an existing astra system.
@@ -51,6 +78,9 @@ impl PackageManager {
         if !config.data_dir.exists() {
             return Err(AstraError::NotInitialized);
         }
+
+        std::fs::create_dir_all(config.transactions_dir())?;
+        std::fs::create_dir_all(config.trusted_keys_dir())?;
 
         let db = Database::open(&config.db_path())?;
         let keyring = if config.keyring_path().exists() {
@@ -241,34 +271,41 @@ impl PackageManager {
 
             // read & verify
             let package = PackageReader::read_from_file(&pkg_path)?;
+            self.verify_package_file_checksums(&package)?;
 
             // verify signature against any key in keyring
-            let mut verified = false;
-            for key in self.keyring.all_keys().values() {
-                if package.verify(key).is_ok() {
-                    verified = true;
-                    break;
+            self.verify_with_keyring(&package, pkg_name)?;
+
+            let tx_id = self.begin_transaction(TxOperation::Install, &package.metadata.name)?;
+            let result: Result<Vec<PathBuf>, AstraError> = (|| {
+                self.run_script_if_present(&package, ScriptType::PreInstall)?;
+                let file_paths = self.extract_files(&package)?;
+                self.update_transaction_created_files(&tx_id, file_paths.clone())?;
+
+                let reason = if names.contains(pkg_name) {
+                    InstallReason::Explicit
+                } else {
+                    InstallReason::Dependency
+                };
+                self.db
+                    .install_package(&package.metadata, &file_paths, reason)?;
+
+                self.run_script_if_present(&package, ScriptType::PostInstall)?;
+                Ok(file_paths)
+            })();
+
+            match result {
+                Ok(_paths) => {
+                    self.commit_transaction(&tx_id)?;
+                }
+                Err(err) => {
+                    self.rollback_transaction(&tx_id)?;
+                    return Err(err);
                 }
             }
-            if !verified {
-                return Err(AstraError::Other(format!(
-                    "signature verification failed for '{pkg_name}': no trusted key"
-                )));
-            }
-
-            // install files
-            let file_paths = self.extract_files(&package)?;
-
-            // record in database
-            let reason = if names.contains(pkg_name) {
-                InstallReason::Explicit
-            } else {
-                InstallReason::Dependency
-            };
-            self.db
-                .install_package(&package.metadata, &file_paths, reason)?;
 
             installed.push(pkg_name.clone());
+            self.log_event(&format!("installed package '{}'", pkg_name));
         }
 
         Ok(installed)
@@ -277,26 +314,36 @@ impl PackageManager {
     /// installs a local .astpkg file.
     pub fn install_local(&mut self, path: &Path, skip_verify: bool) -> Result<String, AstraError> {
         let package = PackageReader::read_from_file(path)?;
+        self.verify_package_file_checksums(&package)?;
 
         if !skip_verify {
-            let mut verified = false;
-            for key in self.keyring.all_keys().values() {
-                if package.verify(key).is_ok() {
-                    verified = true;
-                    break;
-                }
-            }
-            if !verified {
-                return Err(AstraError::Other(format!(
-                    "signature verification failed for '{}': no trusted key",
-                    package.metadata.name
-                )));
+            self.verify_with_keyring(&package, &package.metadata.name)?;
+        }
+
+        let tx_id = self.begin_transaction(TxOperation::Install, &package.metadata.name)?;
+        let result: Result<(), AstraError> = (|| {
+            self.run_script_if_present(&package, ScriptType::PreInstall)?;
+            let file_paths = self.extract_files(&package)?;
+            self.update_transaction_created_files(&tx_id, file_paths.clone())?;
+            self.db
+                .install_package(&package.metadata, &file_paths, InstallReason::Explicit)?;
+            self.run_script_if_present(&package, ScriptType::PostInstall)?;
+            Ok(())
+        })();
+
+        match result {
+            Ok(()) => self.commit_transaction(&tx_id)?,
+            Err(err) => {
+                self.rollback_transaction(&tx_id)?;
+                return Err(err);
             }
         }
 
-        let file_paths = self.extract_files(&package)?;
-        self.db
-            .install_package(&package.metadata, &file_paths, InstallReason::Explicit)?;
+        self.log_event(&format!(
+            "installed package '{}' from local file {}",
+            package.metadata.name,
+            path.display()
+        ));
 
         Ok(package.metadata.name.clone())
     }
@@ -305,7 +352,8 @@ impl PackageManager {
     fn extract_files(&self, package: &Package) -> Result<Vec<PathBuf>, AstraError> {
         let mut paths = Vec::new();
         for (rel_path, content) in &package.files {
-            let dest = self.config.root.join(rel_path);
+            Self::validate_relative_path(rel_path)?;
+            let dest = self.safe_root_join(rel_path)?;
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent)?;
             }
@@ -351,6 +399,8 @@ impl PackageManager {
                 Self::remove_empty_dirs(parent, &self.config.root);
             }
         }
+
+        self.log_event(&format!("removed package '{}'", name));
 
         Ok(files)
     }
@@ -406,7 +456,11 @@ impl PackageManager {
         if names.is_empty() {
             return Ok(vec![]);
         }
-        self.install(&names).await
+        let upgraded = self.install(&names).await?;
+        for name in &upgraded {
+            self.log_event(&format!("upgraded package '{}'", name));
+        }
+        Ok(upgraded)
     }
 
     // ─── verification ──────────────────────────────────────────────
@@ -446,8 +500,35 @@ impl PackageManager {
         name: &str,
         key: astra_crypto::PublicKey,
     ) -> Result<(), AstraError> {
+        std::fs::create_dir_all(self.config.trusted_keys_dir())?;
+        let key_file_path = self
+            .config
+            .trusted_keys_dir()
+            .join(format!("{}.pub", name.replace('/', "_")));
+        key.save_to_file(&key_file_path)?;
+
         self.keyring.add(name.to_string(), key);
         self.keyring.save_to_file(&self.config.keyring_path())?;
+        self.log_event(&format!("added trusted key '{}'", name));
+        Ok(())
+    }
+
+    /// removes a public key from the keyring.
+    pub fn remove_key(&mut self, name: &str) -> Result<(), AstraError> {
+        if self.keyring.remove(name).is_none() {
+            return Err(AstraError::Other(format!("key '{}' not found", name)));
+        }
+        self.keyring.save_to_file(&self.config.keyring_path())?;
+
+        let key_file_path = self
+            .config
+            .trusted_keys_dir()
+            .join(format!("{}.pub", name.replace('/', "_")));
+        if key_file_path.exists() {
+            let _ = std::fs::remove_file(key_file_path);
+        }
+
+        self.log_event(&format!("removed trusted key '{}'", name));
         Ok(())
     }
 
@@ -482,12 +563,229 @@ impl PackageManager {
     // ─── building ──────────────────────────────────────────────────
 
     /// builds a package from a directory.
-    pub fn build(&self, pkg_dir: &Path, output_dir: &Path) -> Result<PathBuf, AstraError> {
+    pub fn build(
+        &self,
+        pkg_dir: &Path,
+        output_dir: &Path,
+        sandbox: bool,
+    ) -> Result<PathBuf, AstraError> {
         let keypair = self.load_keypair()?;
-        Ok(Builder::build(pkg_dir, &keypair, output_dir)?)
+        Ok(Builder::build(pkg_dir, &keypair, output_dir, sandbox)?)
     }
 
     // ─── helpers ───────────────────────────────────────────────────
+
+    fn verify_with_keyring(&self, package: &Package, pkg_name: &str) -> Result<(), AstraError> {
+        let mut verified = false;
+        for key in self.keyring.all_keys().values() {
+            if package.verify(key).is_ok() {
+                verified = true;
+                break;
+            }
+        }
+        if !verified {
+            return Err(AstraError::Other(format!(
+                "signature verification failed for '{pkg_name}': no trusted key"
+            )));
+        }
+        Ok(())
+    }
+
+    fn verify_package_file_checksums(&self, package: &Package) -> Result<(), AstraError> {
+        for (path, content) in &package.files {
+            let key = path.to_string_lossy().replace('\\', "/");
+            if let Some(expected) = package.metadata.checksums.get(&key) {
+                let actual = sha256_hex(content);
+                if actual != expected.sha256 {
+                    return Err(AstraError::Other(format!(
+                        "checksum mismatch in package '{}' for file '{}'",
+                        package.metadata.name, key
+                    )));
+                }
+                if expected.size != content.len() as u64 {
+                    return Err(AstraError::Other(format!(
+                        "size mismatch in package '{}' for file '{}'",
+                        package.metadata.name, key
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_relative_path(path: &Path) -> Result<(), AstraError> {
+        if path.is_absolute() {
+            return Err(AstraError::Other(format!(
+                "invalid package path '{}': absolute paths are forbidden",
+                path.display()
+            )));
+        }
+        for component in path.components() {
+            if matches!(component, Component::ParentDir) {
+                return Err(AstraError::Other(format!(
+                    "invalid package path '{}': parent traversal is forbidden",
+                    path.display()
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn safe_root_join(&self, rel_path: &Path) -> Result<PathBuf, AstraError> {
+        let root = self
+            .config
+            .root
+            .canonicalize()
+            .unwrap_or_else(|_| self.config.root.clone());
+        let dest = root.join(rel_path);
+        if !dest.starts_with(&root) {
+            return Err(AstraError::Other(format!(
+                "refusing to write outside root: '{}'",
+                rel_path.display()
+            )));
+        }
+        Ok(dest)
+    }
+
+    fn begin_transaction(&self, operation: TxOperation, package: &str) -> Result<String, AstraError> {
+        std::fs::create_dir_all(self.config.transactions_dir())?;
+        let id = format!(
+            "{}-{}",
+            chrono::Utc::now().timestamp_millis(),
+            package.replace('/', "_")
+        );
+        let journal = TxJournal {
+            id: id.clone(),
+            operation,
+            package: package.to_string(),
+            created_files: Vec::new(),
+            removed_files: Vec::new(),
+        };
+        let tx_file = self.config.transactions_dir().join(format!("{}.json", &id));
+        let json = serde_json::to_string_pretty(&journal)
+            .map_err(|e| AstraError::Other(e.to_string()))?;
+        std::fs::write(tx_file, json)?;
+        Ok(id)
+    }
+
+    fn update_transaction_created_files(
+        &self,
+        tx_id: &str,
+        created_files: Vec<PathBuf>,
+    ) -> Result<(), AstraError> {
+        let tx_file = self.config.transactions_dir().join(format!("{}.json", tx_id));
+        let content = std::fs::read_to_string(&tx_file)?;
+        let mut journal: TxJournal =
+            serde_json::from_str(&content).map_err(|e| AstraError::Other(e.to_string()))?;
+        journal.created_files = created_files;
+        let json = serde_json::to_string_pretty(&journal)
+            .map_err(|e| AstraError::Other(e.to_string()))?;
+        std::fs::write(tx_file, json)?;
+        Ok(())
+    }
+
+    fn commit_transaction(&self, tx_id: &str) -> Result<(), AstraError> {
+        let tx_file = self.config.transactions_dir().join(format!("{}.json", tx_id));
+        if tx_file.exists() {
+            std::fs::remove_file(tx_file)?;
+        }
+        Ok(())
+    }
+
+    fn rollback_transaction(&self, tx_id: &str) -> Result<(), AstraError> {
+        let tx_file = self.config.transactions_dir().join(format!("{}.json", tx_id));
+        if !tx_file.exists() {
+            return Ok(());
+        }
+
+        let content = std::fs::read_to_string(&tx_file)?;
+        let journal: TxJournal =
+            serde_json::from_str(&content).map_err(|e| AstraError::Other(e.to_string()))?;
+
+        for rel_path in &journal.created_files {
+            if let Ok(full_path) = self.safe_root_join(rel_path) {
+                if full_path.exists() {
+                    let _ = std::fs::remove_file(&full_path);
+                }
+                if let Some(parent) = full_path.parent() {
+                    Self::remove_empty_dirs(parent, &self.config.root);
+                }
+            }
+        }
+
+        let _ = self.db.remove_package(&journal.package);
+        let _ = std::fs::remove_file(&tx_file);
+        self.log_event(&format!(
+            "rolled back transaction {} for package '{}'",
+            tx_id, journal.package
+        ));
+        Ok(())
+    }
+
+    fn recover_transactions(&self) -> Result<(), AstraError> {
+        let tx_dir = self.config.transactions_dir();
+        if !tx_dir.exists() {
+            return Ok(());
+        }
+
+        for entry in std::fs::read_dir(tx_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() || path.extension().map(|x| x != "json").unwrap_or(true) {
+                continue;
+            }
+
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                let _ = self.rollback_transaction(stem);
+            }
+        }
+        Ok(())
+    }
+
+    fn run_script_if_present(&self, package: &Package, script: ScriptType) -> Result<(), AstraError> {
+        let Some(script_content) = package.scripts.get(&script) else {
+            return Ok(());
+        };
+
+        #[cfg(not(unix))]
+        {
+            let _ = script_content;
+            tracing::warn!("Skipping lifecycle script on non-Unix host");
+            return Ok(());
+        }
+
+        #[cfg(unix)]
+        {
+            let status = Command::new("sh")
+                .arg("-c")
+                .arg(script_content)
+                .env("ASTRA_ROOT", &self.config.root)
+                .stdin(Stdio::null())
+                .status()?;
+            if !status.success() {
+                return Err(AstraError::Other(format!(
+                    "lifecycle script '{}' failed for package '{}'",
+                    script.filename(), package.metadata.name
+                )));
+            }
+            Ok(())
+        }
+    }
+
+    fn log_event(&self, message: &str) {
+        let log_path = self.config.log_path();
+        if let Some(parent) = log_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
+            let _ = writeln!(
+                file,
+                "{} {}",
+                chrono::Utc::now().to_rfc3339(),
+                message
+            );
+        }
+    }
 
     fn find_package_in_repos(
         &self,

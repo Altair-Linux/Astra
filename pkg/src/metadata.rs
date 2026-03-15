@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// metadata stored inside every `.astpkg` file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +34,7 @@ pub struct Metadata {
     pub build_date: DateTime<Utc>,
     /// sha-256 checksums for every file in the package.
     #[serde(default)]
-    pub checksums: HashMap<String, Checksum>,
+    pub checksums: BTreeMap<String, Checksum>,
     /// total size when installed (bytes).
     #[serde(default)]
     pub installed_size: u64,
@@ -178,7 +178,7 @@ mod tests {
             maintainer: "Test User <test@example.com>".into(),
             license: "ZPL-2.0".into(),
             build_date: Utc::now(),
-            checksums: HashMap::new(),
+            checksums: BTreeMap::new(),
             installed_size: 0,
         };
         assert!(meta.validate().is_ok());
@@ -198,7 +198,7 @@ mod tests {
             maintainer: "Test User <test@example.com>".into(),
             license: "ZPL-2.0".into(),
             build_date: Utc::now(),
-            checksums: HashMap::new(),
+            checksums: BTreeMap::new(),
             installed_size: 0,
         };
         assert!(meta.validate().is_err());
