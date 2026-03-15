@@ -61,7 +61,7 @@ jobs:
           Astra/target/debug/astra --data-dir .astra-test --root .astra-root init
           Astra/target/debug/astra --data-dir .astra-test --root .astra-root key generate
           Astra/target/debug/astra --data-dir .astra-test --root .astra-root key export -o altair-repo/keys/repo.pub
-          Astra/target/debug/astra --data-dir .astra-test --root .astra-root key add repo altair-repo/keys/repo.pub
+          Astra/target/debug/astra --data-dir .astra-test --root .astra-root key import repo altair-repo/keys/repo.pub
 
       - name: Build all packages
         shell: bash

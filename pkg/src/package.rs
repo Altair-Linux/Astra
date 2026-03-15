@@ -61,31 +61,55 @@ impl Package {
     pub fn signable_content(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
 
-        let metadata_bytes = serde_json::to_vec(&self.metadata).unwrap_or_default();
-        hasher.update((metadata_bytes.len() as u64).to_le_bytes());
-        hasher.update(&metadata_bytes);
+        // hash metadata fields directly so signatures don't depend on map iteration order.
+        hasher.update(self.metadata.name.as_bytes());
+        hasher.update(self.metadata.version.to_string().as_bytes());
+        hasher.update(self.metadata.architecture.as_bytes());
+        hasher.update(self.metadata.description.as_bytes());
+        hasher.update(self.metadata.maintainer.as_bytes());
+        hasher.update(self.metadata.license.as_bytes());
+        hasher.update(self.metadata.build_date.to_rfc3339().as_bytes());
+
+        for dep in &self.metadata.dependencies {
+            hasher.update(dep.name.as_bytes());
+            hasher.update(dep.version_req.as_deref().unwrap_or("*").as_bytes());
+        }
+        for dep in &self.metadata.optional_dependencies {
+            hasher.update(dep.name.as_bytes());
+            hasher.update(dep.version_req.as_deref().unwrap_or("*").as_bytes());
+        }
+        for c in &self.metadata.conflicts {
+            hasher.update(c.as_bytes());
+        }
+        for p in &self.metadata.provides {
+            hasher.update(p.as_bytes());
+        }
+
+        // checksums are stored in a HashMap, so sort keys before hashing.
+        let mut checksum_keys: Vec<_> = self.metadata.checksums.keys().collect();
+        checksum_keys.sort();
+        for key in checksum_keys {
+            let c = &self.metadata.checksums[key];
+            hasher.update(key.as_bytes());
+            hasher.update(c.sha256.as_bytes());
+            hasher.update(c.size.to_le_bytes());
+        }
+        hasher.update(self.metadata.installed_size.to_le_bytes());
 
         // hash all file contents in sorted order for consistency
         let mut paths: Vec<_> = self.files.keys().collect();
         paths.sort();
         for path in paths {
             let content = &self.files[path];
-            let normalized = path.to_string_lossy().replace('\\', "/");
-            hasher.update((normalized.len() as u64).to_le_bytes());
-            hasher.update(normalized.as_bytes());
-            hasher.update((content.len() as u64).to_le_bytes());
+            hasher.update(path.to_string_lossy().replace('\\', "/").as_bytes());
             hasher.update(content);
         }
         // hash scripts in sorted order
         let mut script_types: Vec<_> = self.scripts.keys().collect();
         script_types.sort_by_key(|s| s.filename());
         for st in script_types {
-            let script_name = st.filename();
-            let script_content = self.scripts[st].as_bytes();
-            hasher.update((script_name.len() as u64).to_le_bytes());
-            hasher.update(script_name.as_bytes());
-            hasher.update((script_content.len() as u64).to_le_bytes());
-            hasher.update(script_content);
+            hasher.update(st.filename().as_bytes());
+            hasher.update(self.scripts[st].as_bytes());
         }
         hasher.finalize().to_vec()
     }
