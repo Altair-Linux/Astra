@@ -141,6 +141,26 @@ astra list
 astra verify <package>
 ```
 
+### Ecosystem End-to-End Example
+
+```bash
+# Build package recipes
+astra build ../packages/nano --output ../tmp/out
+astra build ../packages/curl --output ../tmp/out
+
+# Serve local repository from altair-repo channel
+astra serve-repo ../altair-repo/unstable --bind 127.0.0.1:18080
+
+# Configure and refresh repository metadata
+astra repo add unstable http://127.0.0.1:18080/
+astra update
+
+# Lifecycle operations
+astra install nano
+astra remove nano
+astra upgrade
+```
+
 ### Developer Commands
 
 ```bash
@@ -190,6 +210,13 @@ RUST_LOG=debug cargo run -- --verbose list
 # Build release binary
 cargo build --release
 ```
+
+## Related Repositories
+
+- `packages`: package recipes (`astra.pkg`, `Astrafile.yaml`, `build.sh`, `files/`)
+- `altair-repo`: built channel artifacts and repository indexes
+
+The `Astra` ecosystem integration workflow validates build/install/remove/upgrade flow across these repositories.
 
 ---
 
