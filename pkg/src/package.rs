@@ -290,7 +290,7 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use semver::Version;
-    use std::collections::BTreeMap;
+    use std::collections::HashMap;
 
     fn sample_metadata() -> Metadata {
         Metadata {
@@ -305,7 +305,7 @@ mod tests {
             maintainer: "Test <test@example.com>".into(),
             license: "ZPL-2.0".into(),
             build_date: Utc::now(),
-            checksums: BTreeMap::new(),
+            checksums: HashMap::new(),
             installed_size: 0,
         }
     }

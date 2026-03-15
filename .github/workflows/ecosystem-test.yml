@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .astra-test .astra-root
-          mkdir -p .astra-test .astra-root altair-repo/unstable/packages
+          mkdir -p .astra-test .astra-root altair-repo/keys altair-repo/unstable/packages
 
           Astra/target/debug/astra --data-dir .astra-test --root .astra-root init
           Astra/target/debug/astra --data-dir .astra-test --root .astra-root key generate
@@ -81,8 +81,64 @@ jobs:
             exit 1
           fi
 
-      - name: Update unstable channel metadata
-        run: Astra/target/debug/astra --data-dir .astra-test --root .astra-root repo update altair-repo/unstable
+      - name: Generate unstable channel metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pkgs_json="[]"
+          shopt -s nullglob
+          for file in altair-repo/unstable/packages/*.astpkg; do
+            base=$(basename "$file")
+            size=$(stat -c%s "$file")
+            checksum=$(sha256sum "$file" | awk '{print $1}')
+
+            recipe_dir=""
+            for d in packages/*; do
+              if [[ -f "$d/astra.pkg" ]]; then
+                name=$(awk -F= '/^name=/{print $2}' "$d/astra.pkg" | tail -n1)
+                version=$(awk -F= '/^version=/{print $2}' "$d/astra.pkg" | tail -n1)
+                arch=$(awk -F= '/^architecture=/{print $2}' "$d/astra.pkg" | tail -n1)
+                if [[ "$base" == "${name}-${version}-${arch}.astpkg" ]]; then
+                  recipe_dir="$d"
+                  break
+                fi
+              fi
+            done
+
+            if [[ -z "$recipe_dir" ]]; then
+              continue
+            fi
+
+            name=$(awk -F= '/^name=/{print $2}' "$recipe_dir/astra.pkg" | tail -n1)
+            version=$(awk -F= '/^version=/{print $2}' "$recipe_dir/astra.pkg" | tail -n1)
+            arch=$(awk -F= '/^architecture=/{print $2}' "$recipe_dir/astra.pkg" | tail -n1)
+            desc=$(awk -F= '/^description=/{print $2}' "$recipe_dir/astra.pkg" | tail -n1)
+            maint=$(awk -F= '/^maintainer=/{print $2}' "$recipe_dir/astra.pkg" | tail -n1)
+            license=$(awk -F= '/^license=/{print $2}' "$recipe_dir/astra.pkg" | tail -n1)
+
+            entry=$(jq -n \
+              --arg name "$name" \
+              --arg version "$version" \
+              --arg arch "$arch" \
+              --arg desc "$desc" \
+              --arg checksum "$checksum" \
+              --arg filename "$base" \
+              --argjson size "$size" \
+              --arg license "$license" \
+              --arg maintainer "$maint" \
+              '{name:$name,version:$version,architecture:$arch,description:$desc,dependencies:[],conflicts:[],provides:[],checksum:$checksum,filename:$filename,size:$size,license:$license,maintainer:$maintainer}')
+
+            pkgs_json=$(jq -c --argjson entry "$entry" '. + [$entry]' <<< "$pkgs_json")
+          done
+
+          jq -n \
+            --arg name "unstable" \
+            --arg description "Altair Linux package repository" \
+            --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson packages "$pkgs_json" \
+            '{name:$name,description:$description,last_updated:$updated,packages:$packages}' \
+            > altair-repo/unstable/index.json
 
       - name: Start local repository server
         shell: bash
