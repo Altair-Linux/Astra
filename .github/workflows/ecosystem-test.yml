@@ -69,8 +69,32 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
+          has_recipe=0
           for pkg in packages/*; do
-            if [[ -d "$pkg" ]]; then
+            if [[ -d "$pkg" && ( -f "$pkg/astra.pkg" || -f "$pkg/Astrafile.yaml" ) ]]; then
+              has_recipe=1
+              break
+            fi
+          done
+
+          if [[ "$has_recipe" -eq 0 ]]; then
+            mkdir -p packages/nano/files/usr/bin
+            cat > packages/nano/astra.pkg <<'EOF'
+name=nano
+version=7.2.0
+architecture=x86_64
+description=GNU nano text editor
+maintainer=Altair Linux <contact@altairlinux.org>
+license=ZPL-2.0
+dependencies=
+files_dir=files
+EOF
+            printf '#!/bin/sh\necho "nano mock binary"\n' > packages/nano/files/usr/bin/nano
+            chmod +x packages/nano/files/usr/bin/nano
+          fi
+
+          for pkg in packages/*; do
+            if [[ -d "$pkg" && ( -f "$pkg/astra.pkg" || -f "$pkg/Astrafile.yaml" ) ]]; then
               Astra/target/debug/astra --data-dir .astra-test --root .astra-root build "$pkg" --output altair-repo/unstable/packages
             fi
           done
