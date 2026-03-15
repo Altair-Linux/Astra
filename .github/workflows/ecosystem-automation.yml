@@ -1,0 +1,71 @@
+name: Ecosystem Automation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [packages-updated]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  lifecycle-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Astra
+        uses: actions/checkout@v4
+        with:
+          path: Astra
+
+      - name: Checkout packages
+        uses: actions/checkout@v4
+        with:
+          repository: Altair-Linux/packages
+          path: packages
+
+      - name: Checkout altair-repo
+        uses: actions/checkout@v4
+        with:
+          repository: Altair-Linux/altair-repo
+          path: altair-repo
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run lifecycle automation
+        shell: pwsh
+        run: |
+          ./Astra/scripts/ops/lifecycle-e2e.ps1 -WorkspaceRoot "${{ github.workspace }}" -RunId "gha-${{ github.run_id }}"
+
+      - name: Run final verification report
+        shell: pwsh
+        run: |
+          ./Astra/scripts/ops/final-verify.ps1 -WorkspaceRoot "${{ github.workspace }}" -LifecycleRunId "gha-${{ github.run_id }}"
+
+      - name: Upload operation logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecosystem-ops-logs-${{ github.run_id }}
+          path: |
+            .ops-runtime/gha-${{ github.run_id }}/**
+            .ops-runtime/final-verify/**
+          if-no-files-found: warn
+
+      - name: Notify Discord on failure
+        if: failure() && secrets.DISCORD_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{content:("❌ Ecosystem Automation workflow failed for " + $repo + "\n" + $run_url)}')
+          curl -sS -X POST -H "Content-Type: application/json" -d "$payload" "${{ secrets.DISCORD_WEBHOOK_URL }}"
