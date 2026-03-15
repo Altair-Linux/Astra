@@ -40,6 +40,29 @@ cargo test -p astra-resolver
 cargo test --workspace -- --nocapture
 ```
 
+### Ecosystem Integration Testing
+
+For cross-repository validation with package recipes and repository artifacts:
+
+```bash
+# Build CLI
+cargo build -p astra
+
+# Prepare isolated data and root
+./target/debug/astra init --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+./target/debug/astra key generate --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+
+# Build one or more package recipes
+./target/debug/astra build ../packages/nano --output ../tmp/out --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+
+# Repo lifecycle
+./target/debug/astra repo add unstable http://127.0.0.1:18080/ --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+./target/debug/astra update --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+./target/debug/astra install nano --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+./target/debug/astra remove nano --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+./target/debug/astra upgrade --data-dir ../tmp/.astra-ci --root ../tmp/.astra-root
+```
+
 ### Code Style
 
 - Follow standard Rust formatting (`cargo fmt`)
