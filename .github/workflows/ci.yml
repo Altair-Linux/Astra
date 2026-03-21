@@ -134,3 +134,13 @@ jobs:
         with:
           name: astra-src
           path: ${{ env.SOURCE_TARBALL }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: rolling-${{ github.sha }}
+          name: Rolling release ${{ github.sha }}
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            ${{ env.SOURCE_TARBALL }}
+            artifacts/**/*
