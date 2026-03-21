@@ -129,6 +129,14 @@ jobs:
             --transform "s|^|astra-${VERSION}/|" \
             .
           echo "SOURCE_TARBALL=astra-${VERSION}-src.tar.gz" >> $GITHUB_ENV
+      - name: Compute SHA256 of source tarball
+        run: |
+          SHA256=$(sha256sum ${{ env.SOURCE_TARBALL }} | awk '{print $1}')
+          echo "SOURCE_SHA256=$SHA256" >> $GITHUB_ENV
+          echo "### Source tarball SHA256" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "$SHA256  ${{ env.SOURCE_TARBALL }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
       - name: Upload source tarball as artifact
         uses: actions/upload-artifact@v4
         with:
