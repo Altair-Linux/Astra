@@ -124,6 +124,8 @@ jobs:
           tar -czf astra-${VERSION}-src.tar.gz \
             --exclude='.git' \
             --exclude='target' \
+            --exclude='artifacts' \
+            --exclude='astra-*-src.tar.gz' \
             --transform "s|^|astra-${VERSION}/|" \
             .
           echo "SOURCE_TARBALL=astra-${VERSION}-src.tar.gz" >> $GITHUB_ENV
